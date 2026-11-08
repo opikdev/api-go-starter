@@ -1,0 +1,586 @@
+openapi: 3.1.0
+info:
+  title: API Go starter
+  version: 1.0.0
+  description: A production-ready Go API. Every error is RFC 9457 Problem Details.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+      required:
+        - status
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+          example: urn:problem:not-found
+        title:
+          type: string
+          example: Resource not found
+        status:
+          type: integer
+          example: 404
+        detail:
+          type: string
+          example: Note note_0190 does not exist.
+        instance:
+          type: string
+          example: /v1/notes/note_0190
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              detail:
+                type: string
+            required:
+              - field
+              - detail
+          description: Present when `type` is urn:problem:validation-failed
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - instance
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: usr_0190a7e4c1f07c3e8d21b6f4a9e05d13
+        email:
+          type: string
+          example: ada@example.com
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-11-07T15:20:30.000Z"
+      required:
+        - id
+        - email
+        - createdAt
+    Credentials:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          format: email
+          example: ada@example.com
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          example: correct-horse-battery
+      required:
+        - email
+        - password
+      additionalProperties: false
+    Session:
+      type: object
+      properties:
+        token:
+          type: string
+          description: 'Send as `Authorization: Bearer <token>`.'
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2026-11-14T15:20:30.000Z"
+      required:
+        - token
+        - expiresAt
+    Note:
+      type: object
+      properties:
+        id:
+          type: string
+          example: note_0190a7e4c1f07c3e8d21b6f4a9e05d13
+        title:
+          type: string
+          example: Launch checklist
+        body:
+          type: string
+          example: Ship the API.
+        version:
+          type: integer
+          example: 1
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-11-07T15:20:30.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-11-07T15:20:30.000Z"
+      required:
+        - id
+        - title
+        - body
+        - version
+        - createdAt
+        - updatedAt
+    CreateNote:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Launch checklist
+        body:
+          type: string
+          maxLength: 10000
+          default: ""
+          example: Ship the API.
+      required:
+        - title
+      additionalProperties: false
+    NoteList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Note'
+        meta:
+          type: object
+          properties:
+            limit:
+              type: integer
+              example: 20
+            nextCursor:
+              type:
+                - string
+                - "null"
+              example: null
+          required:
+            - limit
+            - nextCursor
+      required:
+        - data
+        - meta
+    UpdateNote:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Launch checklist
+        body:
+          type: string
+          maxLength: 10000
+          example: Ship the API.
+      additionalProperties: false
+  parameters: {}
+  responses:
+    ValidationFailed:
+      description: Request validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Authentication required or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        WWW-Authenticate:
+          description: '`Bearer`'
+          schema:
+            type: string
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    EmailTaken:
+      description: Email already registered
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    VersionMismatch:
+      description: Resource version mismatch
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnsupportedMediaType:
+      description: Unsupported media type
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    IdempotencyKeyReused:
+      description: Idempotency key reused
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PreconditionRequired:
+      description: Precondition required
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    RateLimited:
+      description: Too many requests
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying
+          schema:
+            type: integer
+    ServiceUnavailable:
+      description: Service unavailable
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying
+          schema:
+            type: integer
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Check that the process is running
+      tags:
+        - Health
+      responses:
+        "200":
+          description: The process is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Check that the API can reach Postgres
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Ready for traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/users:
+    post:
+      operationId: createUser
+      summary: Register a user
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "400":
+          $ref: '#/components/responses/ValidationFailed'
+        "409":
+          $ref: '#/components/responses/EmailTaken'
+        "415":
+          $ref: '#/components/responses/UnsupportedMediaType'
+        "429":
+          $ref: '#/components/responses/RateLimited'
+  /v1/sessions:
+    post:
+      operationId: createSession
+      summary: Log in
+      description: Exempt from Idempotency-Key, because a replay would have to store the token.
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+          headers:
+            Cache-Control:
+              description: '`no-store`'
+              schema:
+                type: string
+        "400":
+          $ref: '#/components/responses/ValidationFailed'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "415":
+          $ref: '#/components/responses/UnsupportedMediaType'
+        "429":
+          $ref: '#/components/responses/RateLimited'
+  /v1/sessions/current:
+    delete:
+      operationId: deleteCurrentSession
+      summary: Log out
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Session revoked
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "429":
+          $ref: '#/components/responses/RateLimited'
+  /v1/users/me:
+    get:
+      operationId: getCurrentUser
+      summary: Get the current user
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "429":
+          $ref: '#/components/responses/RateLimited'
+  /v1/notes:
+    post:
+      operationId: createNote
+      summary: Create a note
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            description: Replays within 24 hours return the original response.
+          required: false
+          description: Replays within 24 hours return the original response.
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNote'
+      responses:
+        "201":
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+          headers:
+            ETag:
+              description: Version of the note, for If-Match
+              schema:
+                type: string
+            Location:
+              description: URL of the new note
+              schema:
+                type: string
+            Idempotency-Replayed:
+              description: '`true` when this response replays an earlier request'
+              schema:
+                type: string
+        "400":
+          $ref: '#/components/responses/ValidationFailed'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "415":
+          $ref: '#/components/responses/UnsupportedMediaType'
+        "422":
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        "429":
+          $ref: '#/components/responses/RateLimited'
+    get:
+      operationId: listNotes
+      summary: List your notes, newest first
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: '`meta.nextCursor` from a prior page.'
+          required: false
+          description: '`meta.nextCursor` from a prior page.'
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: A page of notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteList'
+        "400":
+          $ref: '#/components/responses/ValidationFailed'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "429":
+          $ref: '#/components/responses/RateLimited'
+  /v1/notes/{id}:
+    get:
+      operationId: getNote
+      summary: Get a note
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: The note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+          headers:
+            ETag:
+              description: Version of the note, for If-Match
+              schema:
+                type: string
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "429":
+          $ref: '#/components/responses/RateLimited'
+    patch:
+      operationId: updateNote
+      summary: Update a note
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: id
+          in: path
+        - schema:
+            type: string
+            description: The `ETag` from your last read. Required.
+            example: '"1"'
+          required: false
+          description: The `ETag` from your last read. Required.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNote'
+      responses:
+        "200":
+          description: The updated note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+          headers:
+            ETag:
+              description: Version of the note, for If-Match
+              schema:
+                type: string
+        "400":
+          $ref: '#/components/responses/ValidationFailed'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "412":
+          $ref: '#/components/responses/VersionMismatch'
+        "415":
+          $ref: '#/components/responses/UnsupportedMediaType'
+        "428":
+          $ref: '#/components/responses/PreconditionRequired'
+        "429":
+          $ref: '#/components/responses/RateLimited'
+    delete:
+      operationId: deleteNote
+      summary: Delete a note
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: id
+          in: path
+      responses:
+        "204":
+          description: Note deleted
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "429":
+          $ref: '#/components/responses/RateLimited'
+webhooks: {}

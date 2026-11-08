@@ -1,0 +1,20 @@
+services:
+  dev:
+    image: golang:1.27
+    command: sleep infinity
+    working_dir: /workspace
+    volumes:
+      # Relative to the repo root, because compose.yaml is the first file loaded.
+      - .:/workspace
+      - dev-go-cache:/go
+    environment:
+      DATABASE_URL: postgres://api_app:api_app_dev_password@db:5432/api?sslmode=disable
+      MIGRATION_DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/api?sslmode=disable
+      # Tests create and drop their own database here, because there's no Docker inside the container.
+      TEST_DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/postgres?sslmode=disable
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+volumes:
+  dev-go-cache:

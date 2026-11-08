@@ -1,0 +1,5 @@
+.env
+.git
+coverage.out
+coverage-hand.out
+test

@@ -1,0 +1,10 @@
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'api_app') THEN
+    CREATE ROLE api_app LOGIN PASSWORD 'api_app_dev_password';
+  END IF;
+END
+$$;
+GRANT USAGE ON SCHEMA public TO api_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO api_app;
