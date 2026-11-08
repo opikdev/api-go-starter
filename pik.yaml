@@ -53,7 +53,13 @@ replace:
       - compose.yaml
       - .devcontainer/devcontainer.json
       - internal/telemetry/telemetry.go
-      - test/e2e/stack_test.go
+  # The module path above may contain the project name, so rename only these exact strings here.
+  - from: '"api-go-starter-e2e"'
+    to: '"{{name}}-e2e"'
+    files: [test/e2e/stack_test.go]
+  - from: 'traces.contains("api-go-starter")'
+    to: 'traces.contains("{{name}}")'
+    files: [test/e2e/stack_test.go]
 exclude:
   - .baseline.sha256
   - .github/workflows/baseline-check.yml
