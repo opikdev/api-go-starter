@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-  C[Client] --> M["Middleware: tracing, request ID, logs, security headers, CORS"]
+  C[Client] --> M["Middleware: tracing, request ID, logs, panic recovery, security headers, CORS"]
   M --> L["/v1: rate limit and body limit"]
   L --> V["OpenAPI validator and auth"]
   V --> H["Strict handlers"]
@@ -27,7 +27,7 @@ flowchart LR
 
 - **Contract:** `oapi-codegen` turns the spec into a strict server interface. A handler that's missing or returns the wrong type won't compile. The kin-openapi validator checks every `/v1` request against the spec before it reaches a handler.
 - **Auth:** the validator calls `authenticate` for each operation that declares the `bearer` scheme, and stores the user on the request context. Public operations skip it.
-- **Errors:** every failure is RFC 9457 Problem Details. Unexpected errors are logged and recorded on the trace, and the client only sees a request ID.
+- **Errors:** every failure is RFC 9457 Problem Details. Unexpected errors and panics are logged, with a stack for panics, and recorded on the trace. The client only sees a request ID.
 - **Authorization:** every note query filters by the caller's user ID, so another user's note looks like it doesn't exist.
 - **Concurrency:** updates need an `If-Match` version, and the check happens inside the `UPDATE` statement.
 - **Idempotency:** the key and the note are written in one transaction. A concurrent duplicate waits for the first to commit, then replays it.

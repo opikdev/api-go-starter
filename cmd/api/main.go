@@ -91,6 +91,7 @@ func serve(ctx context.Context) error {
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 
 	go func() {

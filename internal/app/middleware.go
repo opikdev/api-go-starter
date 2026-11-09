@@ -4,17 +4,20 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/opikdev/api-go-starter/internal/problem"
@@ -85,6 +88,28 @@ func withAccessLog(logger *slog.Logger, next http.Handler) http.Handler {
 			"status", recorder.status,
 			"durationMs", time.Since(started).Milliseconds(),
 		)
+	})
+}
+
+// withRecovery turns a panic into a logged, traced internal-error response.
+func withRecovery(logger *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			recovered := recover()
+			if recovered == nil {
+				return
+			}
+			if err, ok := recovered.(error); ok && errors.Is(err, http.ErrAbortHandler) {
+				panic(recovered)
+			}
+			err := fmt.Errorf("panic: %v", recovered)
+			logger.Error("Panic recovered", "requestId", requestID(r.Context()), "err", err, "stack", string(debug.Stack()))
+			span := trace.SpanFromContext(r.Context())
+			span.RecordError(err, trace.WithStackTrace(true))
+			span.SetStatus(codes.Error, "panic")
+			problem.Write(w, r, internalError(r))
+		}()
+		next.ServeHTTP(w, r)
 	})
 }
 

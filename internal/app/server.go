@@ -120,6 +120,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 	handler := withHeadAsGet(top)
 	handler = withCORS(cfg.CORSOrigins, handler)
 	handler = withSecurityHeaders(handler)
+	handler = withRecovery(logger, handler)
 	handler = withAccessLog(logger, handler)
 	handler = withRequestID(handler)
 	handler = otelhttp.NewHandler(handler, "http.request")
@@ -159,9 +160,13 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 		span := trace.SpanFromContext(r.Context())
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "unhandled error")
-		problem.Write(w, r, problem.New(problem.InternalError,
-			fmt.Sprintf("Something went wrong on our side. Retry, and quote request %s if it persists.", requestID(r.Context()))))
+		problem.Write(w, r, internalError(r))
 	}
+}
+
+func internalError(r *http.Request) *problem.Error {
+	return problem.New(problem.InternalError,
+		fmt.Sprintf("Something went wrong on our side. Retry, and quote request %s if it persists.", requestID(r.Context())))
 }
 
 const docsPage = `<!doctype html>
