@@ -7,7 +7,7 @@ Set these on the API process. `.env.example` lists every option, with values for
 | Variable | Type | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | URL | Required | Connection for the `api_app` role |
-| `MIGRATION_DATABASE_URL` | URL | Required for `migrate` | Connection for the `api_owner` role |
+| `MIGRATION_DATABASE_URL` | URL | Required for `migrate` | Connection for the `api_owner` role. `seed` uses it, or `DATABASE_URL` if it's unset |
 | `PORT` | number | `3000` | Listen port |
 | `LOG_LEVEL` | string | `info` | `debug`, `info`, `warn`, or `error` |
 | `DATABASE_STATEMENT_TIMEOUT_MS` | number | `5000` | Cancels slow queries |
