@@ -15,7 +15,6 @@ import (
 	"github.com/opikdev/api-go-starter/internal/app"
 	"github.com/opikdev/api-go-starter/internal/config"
 	"github.com/opikdev/api-go-starter/internal/database"
-	"github.com/opikdev/api-go-starter/internal/store"
 	"github.com/opikdev/api-go-starter/internal/telemetry"
 )
 
@@ -103,7 +102,7 @@ func serve(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := app.DeleteExpiredRows(ctx, store.New(pool)); err != nil {
+				if err := app.DeleteExpiredRows(ctx, pool); err != nil {
 					logger.Error("Cleanup failed", "err", err)
 				}
 			}

@@ -10,7 +10,6 @@ import (
 
 	"github.com/opikdev/api-go-starter/internal/app"
 	"github.com/opikdev/api-go-starter/internal/publicid"
-	"github.com/opikdev/api-go-starter/internal/store"
 )
 
 func TestDatabaseRoles(t *testing.T) {
@@ -84,7 +83,7 @@ func TestCleanup(t *testing.T) {
 	must(appPool.Exec(ctx, "insert into idempotency_keys (user_id, endpoint, key, request_hash, response_body, expires_at) values ($1, 'POST /v1/notes', 'old', 'x', '{}', $2), ($3, 'POST /v1/notes', 'new', 'x', '{}', $4)", expiredID, past, liveID, future))
 	must(appPool.Exec(ctx, "insert into rate_limits (key, reset_at) values ('cleanup:old', $1), ('cleanup:new', $2)", past, future))
 
-	if err := app.DeleteExpiredRows(ctx, store.New(appPool)); err != nil {
+	if err := app.DeleteExpiredRows(ctx, appPool); err != nil {
 		t.Fatal(err)
 	}
 	count := func(query string, args ...any) int {
@@ -100,6 +99,47 @@ func TestCleanup(t *testing.T) {
 	}
 	if count("select count(*) from rate_limits where key = 'cleanup:old'") != 0 || count("select count(*) from rate_limits where key = 'cleanup:new'") != 1 {
 		t.Fatal("rate limits not cleaned correctly")
+	}
+}
+
+func TestCleanupInBatches(t *testing.T) {
+	ctx := context.Background()
+	count := func() int {
+		var n int
+		_ = appPool.QueryRow(ctx, "select count(*) from rate_limits where key like 'batch:%'").Scan(&n)
+		return n
+	}
+	if _, err := appPool.Exec(ctx, "insert into rate_limits (key, reset_at) select 'batch:' || i, now() - interval '1 second' from generate_series(1, 2500) as i"); err != nil {
+		t.Fatal(err)
+	}
+
+	holder, err := pgx.Connect(ctx, ownerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = holder.Close(ctx) }()
+	if _, err := holder.Exec(ctx, "select pg_advisory_lock(hashtext('delete-expired-rows'))"); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.DeleteExpiredRows(ctx, appPool); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(); n != 2500 {
+		t.Fatalf("cleanup ran while another replica held the lock, leaving %d rows", n)
+	}
+
+	if _, err := holder.Exec(ctx, "select pg_advisory_unlock(hashtext('delete-expired-rows'))"); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.DeleteExpiredRows(ctx, appPool); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(); n != 0 {
+		t.Fatalf("left %d expired rows after several batches", n)
+	}
+	var relocked bool
+	if err := holder.QueryRow(ctx, "select pg_try_advisory_lock(hashtext('delete-expired-rows'))").Scan(&relocked); err != nil || !relocked {
+		t.Fatalf("cleanup kept its lock: %v", err)
 	}
 }
 

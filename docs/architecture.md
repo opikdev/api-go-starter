@@ -31,4 +31,5 @@ flowchart LR
 - **Authorization:** every note query filters by the caller's user ID, so another user's note looks like it doesn't exist.
 - **Concurrency:** updates need an `If-Match` version, and the check happens inside the `UPDATE` statement.
 - **Idempotency:** keys are scoped to the user and the endpoint, such as `POST /v1/notes`, so a key reused on another endpoint never replays this one. The key and the note are written in one transaction. A concurrent duplicate waits for the first to commit, then replays it.
+- **Cleanup:** every hour, each replica tries a Postgres advisory lock. The one that gets it deletes expired sessions, idempotency keys, and rate limit windows in batches of 1,000, so no statement hits the statement timeout.
 - **Database roles:** the API connects as `api_app`, which can read and write rows but can't change the schema. Migrations run as `api_owner`.

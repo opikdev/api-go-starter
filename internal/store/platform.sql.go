@@ -38,31 +38,40 @@ func (q *Queries) ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyK
 	return id, err
 }
 
-const deleteExpiredIdempotencyKeys = `-- name: DeleteExpiredIdempotencyKeys :exec
-DELETE FROM idempotency_keys WHERE expires_at <= now()
+const deleteExpiredIdempotencyKeys = `-- name: DeleteExpiredIdempotencyKeys :execrows
+DELETE FROM idempotency_keys WHERE id IN (SELECT id FROM idempotency_keys WHERE expires_at <= now() LIMIT $1)
 `
 
-func (q *Queries) DeleteExpiredIdempotencyKeys(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredIdempotencyKeys)
-	return err
+func (q *Queries) DeleteExpiredIdempotencyKeys(ctx context.Context, limit int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredIdempotencyKeys, limit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const deleteExpiredRateLimits = `-- name: DeleteExpiredRateLimits :exec
-DELETE FROM rate_limits WHERE reset_at <= now()
+const deleteExpiredRateLimits = `-- name: DeleteExpiredRateLimits :execrows
+DELETE FROM rate_limits WHERE id IN (SELECT id FROM rate_limits WHERE reset_at <= now() LIMIT $1)
 `
 
-func (q *Queries) DeleteExpiredRateLimits(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredRateLimits)
-	return err
+func (q *Queries) DeleteExpiredRateLimits(ctx context.Context, limit int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredRateLimits, limit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
-DELETE FROM sessions WHERE expires_at <= now()
+const deleteExpiredSessions = `-- name: DeleteExpiredSessions :execrows
+DELETE FROM sessions WHERE id IN (SELECT id FROM sessions WHERE expires_at <= now() LIMIT $1)
 `
 
-func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredSessions)
-	return err
+func (q *Queries) DeleteExpiredSessions(ctx context.Context, limit int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredSessions, limit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const findIdempotencyKey = `-- name: FindIdempotencyKey :one
@@ -131,4 +140,26 @@ type SaveIdempotentResponseParams struct {
 func (q *Queries) SaveIdempotentResponse(ctx context.Context, arg SaveIdempotentResponseParams) error {
 	_, err := q.db.Exec(ctx, saveIdempotentResponse, arg.ID, arg.ResponseBody)
 	return err
+}
+
+const tryLockCleanup = `-- name: TryLockCleanup :one
+SELECT pg_try_advisory_lock(hashtext('delete-expired-rows')) AS locked
+`
+
+func (q *Queries) TryLockCleanup(ctx context.Context) (bool, error) {
+	row := q.db.QueryRow(ctx, tryLockCleanup)
+	var locked bool
+	err := row.Scan(&locked)
+	return locked, err
+}
+
+const unlockCleanup = `-- name: UnlockCleanup :one
+SELECT pg_advisory_unlock(hashtext('delete-expired-rows')) AS unlocked
+`
+
+func (q *Queries) UnlockCleanup(ctx context.Context) (bool, error) {
+	row := q.db.QueryRow(ctx, unlockCleanup)
+	var unlocked bool
+	err := row.Scan(&unlocked)
+	return unlocked, err
 }

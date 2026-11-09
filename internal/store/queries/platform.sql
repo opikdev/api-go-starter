@@ -18,14 +18,20 @@ SELECT request_hash, response_body FROM idempotency_keys WHERE user_id = $1 AND 
 -- name: SaveIdempotentResponse :exec
 UPDATE idempotency_keys SET response_body = $2, updated_at = now() WHERE id = $1;
 
--- name: DeleteExpiredSessions :exec
-DELETE FROM sessions WHERE expires_at <= now();
+-- name: TryLockCleanup :one
+SELECT pg_try_advisory_lock(hashtext('delete-expired-rows')) AS locked;
 
--- name: DeleteExpiredIdempotencyKeys :exec
-DELETE FROM idempotency_keys WHERE expires_at <= now();
+-- name: UnlockCleanup :one
+SELECT pg_advisory_unlock(hashtext('delete-expired-rows')) AS unlocked;
 
--- name: DeleteExpiredRateLimits :exec
-DELETE FROM rate_limits WHERE reset_at <= now();
+-- name: DeleteExpiredSessions :execrows
+DELETE FROM sessions WHERE id IN (SELECT id FROM sessions WHERE expires_at <= now() LIMIT $1);
+
+-- name: DeleteExpiredIdempotencyKeys :execrows
+DELETE FROM idempotency_keys WHERE id IN (SELECT id FROM idempotency_keys WHERE expires_at <= now() LIMIT $1);
+
+-- name: DeleteExpiredRateLimits :execrows
+DELETE FROM rate_limits WHERE id IN (SELECT id FROM rate_limits WHERE reset_at <= now() LIMIT $1);
 
 -- name: Ping :one
 SELECT 1::int;
