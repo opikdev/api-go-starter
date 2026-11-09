@@ -122,6 +122,11 @@ func TestMigrations(t *testing.T) {
 		}
 	}
 
+	var indexed bool
+	if err := owner.QueryRow(ctx, "select exists (select from pg_indexes where schemaname = 'public' and indexname = 'idx_sessions_user_id')").Scan(&indexed); err != nil || !indexed {
+		t.Errorf("sessions.user_id has no index: %v", err)
+	}
+
 	rows, _ = owner.Query(ctx, `select t.table_name, count(c.column_name) from information_schema.tables t
 		left join information_schema.columns c on c.table_schema = t.table_schema and c.table_name = t.table_name and c.column_name in ('id','created_at','updated_at')
 		where t.table_schema = 'public' and t.table_type = 'BASE TABLE' and t.table_name <> 'goose_db_version' group by t.table_name`)
