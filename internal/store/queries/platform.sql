@@ -7,13 +7,13 @@ ON CONFLICT (key) DO UPDATE SET
 RETURNING count, reset_at;
 
 -- name: ClaimIdempotencyKey :one
-INSERT INTO idempotency_keys (user_id, key, request_hash, response_body, expires_at)
-VALUES ($1, $2, $3, '{}', now() + interval '24 hours')
-ON CONFLICT (user_id, key) DO NOTHING
+INSERT INTO idempotency_keys (user_id, endpoint, key, request_hash, response_body, expires_at)
+VALUES ($1, $2, $3, $4, '{}', now() + interval '24 hours')
+ON CONFLICT (user_id, endpoint, key) DO NOTHING
 RETURNING id;
 
 -- name: FindIdempotencyKey :one
-SELECT request_hash, response_body FROM idempotency_keys WHERE user_id = $1 AND key = $2;
+SELECT request_hash, response_body FROM idempotency_keys WHERE user_id = $1 AND endpoint = $2 AND key = $3;
 
 -- name: SaveIdempotentResponse :exec
 UPDATE idempotency_keys SET response_body = $2, updated_at = now() WHERE id = $1;

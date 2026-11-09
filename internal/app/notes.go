@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -80,6 +79,8 @@ func (h *handlers) CreateNote(ctx context.Context, request api.CreateNoteRequest
 	return api.CreateNote201JSONResponse{Body: note, Headers: headers}, nil
 }
 
+const createNoteEndpoint = "POST /v1/notes"
+
 func (h *handlers) createIdempotently(ctx context.Context, key *string, input store.InsertNoteParams) (api.Note, bool, error) {
 	tx, err := h.pool.Begin(ctx)
 	if err != nil {
@@ -88,33 +89,20 @@ func (h *handlers) createIdempotently(ctx context.Context, key *string, input st
 	defer func() { _ = tx.Rollback(ctx) }()
 	queries := h.queries.WithTx(tx)
 
-	var claimID pgtype.UUID
+	var claimID uuid.UUID
 	if key != nil {
-		payload, err := json.Marshal(struct{ Title, Body string }{input.Title, input.Body})
+		id, replay, err := claimIdempotencyKey(ctx, queries, input.UserID, createNoteEndpoint, *key, struct{ Title, Body string }{input.Title, input.Body})
 		if err != nil {
-			return api.Note{}, false, fmt.Errorf("encode idempotent request: %w", err)
+			return api.Note{}, false, err
 		}
-		sum := sha256.Sum256(payload)
-		requestHash := hex.EncodeToString(sum[:])
-		id, err := queries.ClaimIdempotencyKey(ctx, store.ClaimIdempotencyKeyParams{UserID: input.UserID, Key: *key, RequestHash: requestHash})
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			original, err := queries.FindIdempotencyKey(ctx, store.FindIdempotencyKeyParams{UserID: input.UserID, Key: *key})
-			if err != nil {
-				return api.Note{}, false, fmt.Errorf("read idempotency key %q: %w", *key, err)
-			}
-			if original.RequestHash != requestHash {
-				return api.Note{}, false, problem.New(problem.IdempotencyKeyReused, "This Idempotency-Key was used with a different request body. Use a new key.")
-			}
+		if replay != nil {
 			var note api.Note
-			if err := json.Unmarshal(original.ResponseBody, &note); err != nil {
+			if err := json.Unmarshal(replay, &note); err != nil {
 				return api.Note{}, false, fmt.Errorf("decode stored response for idempotency key %q: %w", *key, err)
 			}
 			return note, true, nil
-		case err != nil:
-			return api.Note{}, false, fmt.Errorf("claim idempotency key: %w", err)
 		}
-		claimID = pgtype.UUID{Bytes: id, Valid: true}
+		claimID = id
 	}
 
 	row, err := queries.InsertNote(ctx, input)
@@ -122,13 +110,9 @@ func (h *handlers) createIdempotently(ctx context.Context, key *string, input st
 		return api.Note{}, false, fmt.Errorf("insert note: %w", err)
 	}
 	note := presentNote(row)
-	if claimID.Valid {
-		body, err := json.Marshal(note)
-		if err != nil {
-			return api.Note{}, false, fmt.Errorf("encode idempotent response: %w", err)
-		}
-		if err := queries.SaveIdempotentResponse(ctx, store.SaveIdempotentResponseParams{ID: claimID.Bytes, ResponseBody: body}); err != nil {
-			return api.Note{}, false, fmt.Errorf("save idempotent response: %w", err)
+	if key != nil {
+		if err := saveIdempotentResponse(ctx, queries, claimID, note); err != nil {
+			return api.Note{}, false, err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

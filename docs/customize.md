@@ -9,12 +9,14 @@ Projects created with `pik new` are already renamed, including the Go module pat
 Copy the shape of `notes`: its handlers are in `internal/app/notes.go` and its tests in `internal/app/notes_test.go`. Work from the contract down, and let the compiler tell you what's missing:
 
 1. Add the paths, schemas, and responses to `api/openapi.yaml`. Reuse the shared `components/responses`, and add `security: [{bearerAuth: []}]` to every operation that needs a user.
-2. Add a migration with the next number, such as `migrations/00003_projects.sql`, with `-- +goose Up` and `-- +goose Down` sections. Give the table a `uuid` primary key that defaults to `uuidv7()`, and a `user_id` column.
+2. Add a migration with the next number, such as `migrations/00004_projects.sql`, with `-- +goose Up` and `-- +goose Down` sections. Give the table a `uuid` primary key that defaults to `uuidv7()`, and a `user_id` column.
 3. Write the queries in `internal/store/queries/projects.sql`. Filter every query by `user_id`.
 4. Run `make generate`. The build now fails until you implement the new `api.StrictServerInterface` methods.
 5. Implement them on `handlers` in a new `internal/app/projects.go`. Format IDs with `publicid`. Return `*problem.Error` for failures the client can act on, and wrap other errors with `fmt.Errorf("<op>: %w", err)`.
 6. Add tests next to `internal/app/notes_test.go`, using the generated client in `internal/apiclient`.
 7. Run `make verify`, and add the new error types to `docs/errors.md` if there are any.
+
+To make a new `POST` idempotent, call `claimIdempotencyKey` and `saveIdempotentResponse` from `internal/app/idempotency.go` in the handler's transaction, as `createIdempotently` does, with the operation's own method and route, such as `POST /v1/projects`.
 
 To put the auth rate limit on a new public operation, add its operation ID to `publicAuthOperations` in `internal/app/server.go`.
 
@@ -28,7 +30,7 @@ To put the auth rate limit on a new public operation, add its operation ID to `p
 
 ## Remove idempotency
 
-Remove the `Idempotency-Key` parameter from `createNote` in the spec, and run `make generate`. Then insert the note directly in `CreateNote`, delete `createIdempotently`, and add a migration that drops `idempotency_keys`. Remove its queries from `internal/store/queries/platform.sql` and its cleanup from `internal/app/cleanup.go`.
+Remove the `Idempotency-Key` parameter from `createNote` in the spec, and run `make generate`. Then insert the note directly in `CreateNote`, delete `createIdempotently` and `internal/app/idempotency.go`, and add a migration that drops `idempotency_keys`. Remove its queries from `internal/store/queries/platform.sql` and its cleanup from `internal/app/cleanup.go`.
 
 ## Remove tracing
 

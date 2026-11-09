@@ -30,6 +30,7 @@ replace:
       - internal/app/database_test.go
       - internal/app/handlers.go
       - internal/app/health.go
+      - internal/app/idempotency.go
       - internal/app/idempotency_test.go
       - internal/app/main_test.go
       - internal/app/middleware.go

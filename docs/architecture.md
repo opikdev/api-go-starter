@@ -30,5 +30,5 @@ flowchart LR
 - **Errors:** every failure is RFC 9457 Problem Details. A handler returns `*problem.Error` for a client mistake. Any other error, or a panic, is logged with a stack for panics, recorded on the trace, and sent as `internal-error` with only a request ID. When the client has disconnected, the error is logged at debug level with status 499 instead.
 - **Authorization:** every note query filters by the caller's user ID, so another user's note looks like it doesn't exist.
 - **Concurrency:** updates need an `If-Match` version, and the check happens inside the `UPDATE` statement.
-- **Idempotency:** the key and the note are written in one transaction. A concurrent duplicate waits for the first to commit, then replays it.
+- **Idempotency:** keys are scoped to the user and the endpoint, such as `POST /v1/notes`, so a key reused on another endpoint never replays this one. The key and the note are written in one transaction. A concurrent duplicate waits for the first to commit, then replays it.
 - **Database roles:** the API connects as `api_app`, which can read and write rows but can't change the schema. Migrations run as `api_owner`.

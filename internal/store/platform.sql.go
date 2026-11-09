@@ -13,20 +13,26 @@ import (
 )
 
 const claimIdempotencyKey = `-- name: ClaimIdempotencyKey :one
-INSERT INTO idempotency_keys (user_id, key, request_hash, response_body, expires_at)
-VALUES ($1, $2, $3, '{}', now() + interval '24 hours')
-ON CONFLICT (user_id, key) DO NOTHING
+INSERT INTO idempotency_keys (user_id, endpoint, key, request_hash, response_body, expires_at)
+VALUES ($1, $2, $3, $4, '{}', now() + interval '24 hours')
+ON CONFLICT (user_id, endpoint, key) DO NOTHING
 RETURNING id
 `
 
 type ClaimIdempotencyKeyParams struct {
 	UserID      uuid.UUID
+	Endpoint    string
 	Key         string
 	RequestHash string
 }
 
 func (q *Queries) ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, claimIdempotencyKey, arg.UserID, arg.Key, arg.RequestHash)
+	row := q.db.QueryRow(ctx, claimIdempotencyKey,
+		arg.UserID,
+		arg.Endpoint,
+		arg.Key,
+		arg.RequestHash,
+	)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -60,12 +66,13 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 }
 
 const findIdempotencyKey = `-- name: FindIdempotencyKey :one
-SELECT request_hash, response_body FROM idempotency_keys WHERE user_id = $1 AND key = $2
+SELECT request_hash, response_body FROM idempotency_keys WHERE user_id = $1 AND endpoint = $2 AND key = $3
 `
 
 type FindIdempotencyKeyParams struct {
-	UserID uuid.UUID
-	Key    string
+	UserID   uuid.UUID
+	Endpoint string
+	Key      string
 }
 
 type FindIdempotencyKeyRow struct {
@@ -74,7 +81,7 @@ type FindIdempotencyKeyRow struct {
 }
 
 func (q *Queries) FindIdempotencyKey(ctx context.Context, arg FindIdempotencyKeyParams) (FindIdempotencyKeyRow, error) {
-	row := q.db.QueryRow(ctx, findIdempotencyKey, arg.UserID, arg.Key)
+	row := q.db.QueryRow(ctx, findIdempotencyKey, arg.UserID, arg.Endpoint, arg.Key)
 	var i FindIdempotencyKeyRow
 	err := row.Scan(&i.RequestHash, &i.ResponseBody)
 	return i, err

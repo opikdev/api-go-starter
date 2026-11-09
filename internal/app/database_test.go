@@ -81,7 +81,7 @@ func TestCleanup(t *testing.T) {
 		}
 	}
 	must(appPool.Exec(ctx, "update sessions set expires_at = $1 where user_id = $2", past, expiredID))
-	must(appPool.Exec(ctx, "insert into idempotency_keys (user_id, key, request_hash, response_body, expires_at) values ($1, 'old', 'x', '{}', $2), ($3, 'new', 'x', '{}', $4)", expiredID, past, liveID, future))
+	must(appPool.Exec(ctx, "insert into idempotency_keys (user_id, endpoint, key, request_hash, response_body, expires_at) values ($1, 'POST /v1/notes', 'old', 'x', '{}', $2), ($3, 'POST /v1/notes', 'new', 'x', '{}', $4)", expiredID, past, liveID, future))
 	must(appPool.Exec(ctx, "insert into rate_limits (key, reset_at) values ('cleanup:old', $1), ('cleanup:new', $2)", past, future))
 
 	if err := app.DeleteExpiredRows(ctx, store.New(appPool)); err != nil {
