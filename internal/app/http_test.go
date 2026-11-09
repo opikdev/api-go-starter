@@ -181,7 +181,11 @@ func TestOpenAPI(t *testing.T) {
 				t.Errorf("%s %s doesn't document 429", method, path)
 			}
 			public := op.OperationID == "createUser" || op.OperationID == "createSession"
-			if !public && (op.Security == nil || len(*op.Security) == 0 || op.Responses.Value("401") == nil) {
+			requiresBearer := op.Security != nil && len(*op.Security) == 1
+			if requiresBearer {
+				_, requiresBearer = (*op.Security)[0]["bearerAuth"]
+			}
+			if !public && (!requiresBearer || op.Responses.Value("401") == nil) {
 				t.Errorf("%s %s must require bearerAuth and document 401", method, path)
 			}
 		}
