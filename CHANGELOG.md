@@ -10,6 +10,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Fixed
 
+- Creating a note with a NUL character in `title` reports the `title` field, not `body`. Create and update share one note-field check.
 - `docs/customize.md` and `docs/architecture.md` name the `bearerAuth` security scheme the spec defines, instead of `bearer`, which failed every request with a 500.
 - A panic in a handler is logged with its stack and request ID, recorded on the trace, and answered with `internal-error`, instead of dropping the connection. `http.Server` errors go to the JSON log.
 - A `*problem.Error` with a slug that isn't in the catalog is sent as `internal-error` with status 500, and logged, instead of panicking on `WriteHeader(0)`.

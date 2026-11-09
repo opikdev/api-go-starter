@@ -55,20 +55,21 @@ func TestCreatingNotes(t *testing.T) {
 		expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 401, "unauthorized")
 	})
 
-	cases := map[string]string{
-		"a blank title":                `{"title":"   "}`,
-		"a long title":                 `{"title":"` + strings.Repeat("x", 201) + `"}`,
-		"a long body":                  `{"title":"x","body":"` + strings.Repeat("y", 10_001) + `"}`,
-		"a missing title":              `{"body":"y"}`,
-		"an unknown field":             `{"title":"x","ownerId":"usr_1"}`,
-		"a NUL character in the title": `{"title":"a\u0000b"}`,
-		"a NUL character in the body":  `{"title":"x","body":"a\u0000b"}`,
+	cases := map[string]struct{ body, field, detail string }{
+		"a blank title":                {`{"title":"   "}`, "title", "must not be blank"},
+		"a long title":                 {`{"title":"` + strings.Repeat("x", 201) + `"}`, "title", "must be at most 200 characters"},
+		"a long body":                  {`{"title":"x","body":"` + strings.Repeat("y", 10_001) + `"}`, "body", "must be at most 10000 characters"},
+		"a missing title":              {`{"body":"y"}`, "title", "is required"},
+		"an unknown field":             {`{"title":"x","ownerId":"usr_1"}`, "ownerId", "isn't a known field"},
+		"a NUL character in the title": {`{"title":"a\u0000b"}`, "title", "must not contain NUL characters"},
+		"a NUL character in the body":  {`{"title":"x","body":"a\u0000b"}`, "body", "must not contain NUL characters"},
 	}
-	for label, body := range cases {
+	for label, c := range cases {
 		t.Run("rejects "+label, func(t *testing.T) {
 			user := s.signUp(t)
-			res := s.raw(t, "POST", "/v1/notes", body, map[string]string{"Authorization": "Bearer " + user.token})
+			res := s.raw(t, "POST", "/v1/notes", c.body, map[string]string{"Authorization": "Bearer " + user.token})
 			expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 400, "validation-failed")
+			expectFieldError(t, res.body, c.field, c.detail)
 		})
 	}
 
@@ -251,11 +252,20 @@ func TestUpdatingNotes(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects an empty patch and a blank title", func(t *testing.T) {
+	t.Run("rejects an invalid patch", func(t *testing.T) {
 		note := createNote(t, c, "x")
-		for _, patch := range []apiclient.UpdateNote{{}, {Title: ptr("  ")}} {
-			res, _ := c.UpdateNoteWithResponse(ctx, note.Id, nil, patch, ifMatch(`"1"`))
+		for _, tc := range []struct {
+			patch         apiclient.UpdateNote
+			field, detail string
+		}{
+			{apiclient.UpdateNote{}, "body", "needs title, body, or both"},
+			{apiclient.UpdateNote{Title: ptr("  ")}, "title", "must not be blank"},
+			{apiclient.UpdateNote{Title: ptr("a\x00b")}, "title", "must not contain NUL characters"},
+			{apiclient.UpdateNote{Body: ptr("a\x00b")}, "body", "must not contain NUL characters"},
+		} {
+			res, _ := c.UpdateNoteWithResponse(ctx, note.Id, nil, tc.patch, ifMatch(`"1"`))
 			expectProblem(t, res.StatusCode(), res.HTTPResponse.Header.Get("Content-Type"), res.Body, 400, "validation-failed")
+			expectFieldError(t, string(res.Body), tc.field, tc.detail)
 		}
 	})
 

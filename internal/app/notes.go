@@ -37,6 +37,24 @@ func presentNote(note store.Note) api.Note {
 
 func etag(version int) *string { return ptr(fmt.Sprintf(`"%d"`, version)) }
 
+// validateNoteFields checks the rules the schema can't express, skipping nil fields. Trim the title first.
+func validateNoteFields(title, body *string) error {
+	var errs []problem.FieldError
+	if title != nil && *title == "" {
+		errs = append(errs, problem.FieldError{Field: "title", Detail: "must not be blank"})
+	}
+	if title != nil && strings.ContainsRune(*title, 0) {
+		errs = append(errs, problem.FieldError{Field: "title", Detail: "must not contain NUL characters"})
+	}
+	if body != nil && strings.ContainsRune(*body, 0) {
+		errs = append(errs, problem.FieldError{Field: "body", Detail: "must not contain NUL characters"})
+	}
+	if len(errs) > 0 {
+		return &problem.Error{Slug: problem.ValidationFailed, Detail: invalidFieldsDetail, Errors: errs}
+	}
+	return nil
+}
+
 func noteNotFound(id string) *problem.Error {
 	return problem.New(problem.NotFound, fmt.Sprintf("Note %s does not exist.", id))
 }
@@ -47,11 +65,8 @@ func (h *handlers) CreateNote(ctx context.Context, request api.CreateNoteRequest
 	if request.Body.Body != nil {
 		input.Body = *request.Body.Body
 	}
-	if strings.ContainsRune(input.Title, 0) || strings.ContainsRune(input.Body, 0) {
-		return nil, validationProblem("body", "must not contain NUL characters")
-	}
-	if input.Title == "" {
-		return nil, validationProblem("title", "must not be blank")
+	if err := validateNoteFields(&input.Title, &input.Body); err != nil {
+		return nil, err
 	}
 
 	note, replayed, err := h.createIdempotently(ctx, request.Params.IdempotencyKey, input)
@@ -195,14 +210,9 @@ func (h *handlers) UpdateNote(ctx context.Context, request api.UpdateNoteRequest
 	}
 	if patch.Title != nil {
 		patch.Title = ptr(strings.TrimSpace(*patch.Title))
-		if *patch.Title == "" {
-			return nil, validationProblem("title", "must not be blank")
-		}
 	}
-	for field, value := range map[string]*string{"title": patch.Title, "body": patch.Body} {
-		if value != nil && strings.ContainsRune(*value, 0) {
-			return nil, validationProblem(field, "must not contain NUL characters")
-		}
+	if err := validateNoteFields(patch.Title, patch.Body); err != nil {
+		return nil, err
 	}
 
 	userID := currentUser(ctx).ID
