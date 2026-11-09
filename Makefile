@@ -1,4 +1,4 @@
-.PHONY: generate lint test coverage check-generated verify e2e run migrate seed
+.PHONY: generate lint test coverage check-generated check-migrations verify e2e run migrate seed
 
 generate:
 	go generate ./...
@@ -19,7 +19,10 @@ coverage:
 check-generated: generate
 	git diff --exit-code -- internal/api internal/apiclient internal/store
 
-verify: lint check-generated coverage
+check-migrations:
+	scripts/check-migrations.sh
+
+verify: lint check-generated check-migrations coverage
 	.agents/check.sh
 	.github/scripts/check-repo-standards.sh
 

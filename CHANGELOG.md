@@ -6,6 +6,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Added
 
+- `scripts/check-migrations.sh` fails when a migration on `main` is changed, deleted, or renamed, or when two migrations share a version. `make verify` and CI run it. Without an `origin/main` or `main` ref, it skips with a note.
 - Migration `00002` adds `idx_sessions_user_id`, so deleting a user doesn't scan `sessions`. It builds the index concurrently, outside a transaction.
 - `DATABASE_POOL_MAX` sets the pool size. It wins over `pool_max_conns` in `DATABASE_URL`, which wins over the default of 10. A `connect_timeout` in the URL is no longer overridden.
 

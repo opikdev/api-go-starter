@@ -46,7 +46,7 @@ Use `/healthz` for liveness, or the image's built-in `HEALTHCHECK`. It stays 200
 
 ## Change the schema safely
 
-Treat migrations as append-only and forward-only. Each file has a goose `Down` section for local use, but in production, undo a change with a new migration, or restore from a backup if data was lost.
+Treat migrations as append-only and forward-only. `scripts/check-migrations.sh`, which `make verify` and CI run, fails when a migration that exists on `main` is changed, deleted, or renamed, or when two migrations share a version. Each file has a goose `Down` section for local use, but in production, undo a change with a new migration, or restore from a backup if data was lost.
 
 - Rename or retype a column in steps: add the new one, backfill, switch the code, then drop the old one in a later deploy.
 - Use `CREATE INDEX CONCURRENTLY` on large tables, in a migration marked `-- +goose NO TRANSACTION`.
