@@ -12,6 +12,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Changed
 
+- The release workflow runs the CI checks first and publishes the image only if they pass.
 - **Breaking:** `TRUST_PROXY_HOPS` replaces `TRUST_PROXY`. It takes the Nth `X-Forwarded-For` address from the right, so the API works behind more than one proxy. Set `TRUST_PROXY_HOPS=1` for the old `TRUST_PROXY=true`. The API refuses to start while `TRUST_PROXY` is set.
 - **Breaking:** `seed` adds demo data only when `SEED_DEMO_DATA=true`, and `APP_ENV` is gone. Compose and `.env.example` set the flag for local development.
 - Every command reads its settings through `internal/config`, and `docs/operations.md` documents `OTEL_SERVICE_NAME` and `SEED_DEMO_DATA`.
