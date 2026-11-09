@@ -22,7 +22,7 @@ type Config struct {
 	DatabaseURL            string
 	StatementTimeoutMS     int
 	CORSOrigins            []string
-	TrustProxy             bool
+	TrustProxyHops         int
 	SessionTTLHours        int32
 	RateLimitPerMinute     int
 	AuthRateLimitPerMinute int
@@ -125,7 +125,7 @@ func Load(env func(string) string) (Config, error) {
 		LogLevel:               r.str("LOG_LEVEL", "info"),
 		DatabaseURL:            r.str("DATABASE_URL", ""),
 		StatementTimeoutMS:     r.integer("DATABASE_STATEMENT_TIMEOUT_MS", 5000, 1, 600_000),
-		TrustProxy:             r.flag("TRUST_PROXY"),
+		TrustProxyHops:         r.integer("TRUST_PROXY_HOPS", 0, 0, 100),
 		SessionTTLHours:        r.int32("SESSION_TTL_HOURS", 168, 1, 8760),
 		RateLimitPerMinute:     r.integer("RATE_LIMIT_PER_MINUTE", 300, 1, 1_000_000),
 		AuthRateLimitPerMinute: r.integer("AUTH_RATE_LIMIT_PER_MINUTE", 10, 1, 1_000_000),
@@ -141,6 +141,9 @@ func Load(env func(string) string) (Config, error) {
 	case "debug", "info", "warn", "error":
 	default:
 		r.issues = append(r.issues, "LOG_LEVEL must be debug, info, warn, or error")
+	}
+	if r.str("TRUST_PROXY", "") != "" {
+		r.issues = append(r.issues, "TRUST_PROXY was replaced by TRUST_PROXY_HOPS. Set TRUST_PROXY_HOPS=1 for the old behavior.")
 	}
 	r.databaseURL("DATABASE_URL", cfg.DatabaseURL)
 	if err := r.err(); err != nil {

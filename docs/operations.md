@@ -12,7 +12,7 @@ Set these on the API process. `.env.example` lists every option, with values for
 | `LOG_LEVEL` | string | `info` | `debug`, `info`, `warn`, or `error` |
 | `DATABASE_STATEMENT_TIMEOUT_MS` | number | `5000` | Cancels slow queries |
 | `CORS_ORIGINS` | list | Empty | Comma-separated browser origins. Empty disables CORS |
-| `TRUST_PROXY` | boolean | `false` | Set to `true` only behind a proxy that appends to `X-Forwarded-For` |
+| `TRUST_PROXY_HOPS` | number | `0` | How many proxies in front of the API append to `X-Forwarded-For`. See below |
 | `SESSION_TTL_HOURS` | number | `168` | Session lifetime |
 | `RATE_LIMIT_PER_MINUTE` | number | `300` | Per client, across `/v1` |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | number | `10` | Per client, on registration and login |
@@ -20,7 +20,12 @@ Set these on the API process. `.env.example` lists every option, with values for
 | `OTEL_SERVICE_NAME` | string | `api-go-starter` | Service name on exported traces |
 | `SEED_DEMO_DATA` | boolean | `false` | Set to `true` to let `seed` add the fake demo user. Compose and `.env.example` set it for local development |
 
-Set `TRUST_PROXY` correctly, or every client behind a load balancer shares one rate limit.
+Set `TRUST_PROXY_HOPS` to the number of proxies you run in front of the API, or every client behind a load balancer shares one rate limit:
+
+- `0` ignores `X-Forwarded-For` and uses the TCP peer address. Use it when clients connect directly.
+- `N` takes the Nth address from the right of `X-Forwarded-For`, after joining every header value with commas. With fewer addresses than `N`, it takes the leftmost. If that entry is empty or not an IP address, it uses the TCP peer address.
+
+Set it no higher than your real proxy count, because clients can put any addresses they like at the left of the header. `TRUST_PROXY` was removed, and the API refuses to start while it's set. `TRUST_PROXY=true` is `TRUST_PROXY_HOPS=1`.
 
 ## Set up production roles
 

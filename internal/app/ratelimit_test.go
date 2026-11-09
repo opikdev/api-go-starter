@@ -15,8 +15,8 @@ func TestRateLimits(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("blocks login after the auth limit, with Retry-After", func(t *testing.T) {
-		s := newServer(t, map[string]string{"AUTH_RATE_LIMIT_PER_MINUTE": "3"})
-		c := s.client(t, clientOptions{ip: "auth-" + randomHex(6)})
+		s := newServer(t, map[string]string{"AUTH_RATE_LIMIT_PER_MINUTE": "3", "TRUST_PROXY_HOPS": "1"})
+		c := s.client(t, clientOptions{ip: randomIP()})
 		login := func() *apiclient.CreateSessionResponse {
 			res, _ := c.CreateSessionWithResponse(ctx, apiclient.Credentials{Email: openapi_types.Email(uniqueEmail()), Password: testPassword})
 			return res
@@ -35,8 +35,8 @@ func TestRateLimits(t *testing.T) {
 	})
 
 	t.Run("applies the global limit to every /v1 route", func(t *testing.T) {
-		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "2"})
-		ip := "global-" + randomHex(6)
+		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "2", "TRUST_PROXY_HOPS": "1"})
+		ip := randomIP()
 		s.raw(t, "GET", "/v1/notes", "", map[string]string{"X-Forwarded-For": ip})
 		s.raw(t, "GET", "/v1/users/me", "", map[string]string{"X-Forwarded-For": ip})
 		res := s.raw(t, "GET", "/v1/notes", "", map[string]string{"X-Forwarded-For": ip})
@@ -45,16 +45,16 @@ func TestRateLimits(t *testing.T) {
 
 	t.Run("reports the remaining budget", func(t *testing.T) {
 		token := newServer(t, nil).signUp(t).token
-		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "5"})
-		res := s.raw(t, "GET", "/v1/users/me", "", map[string]string{"Authorization": "Bearer " + token, "X-Forwarded-For": "budget-" + randomHex(6)})
+		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "5", "TRUST_PROXY_HOPS": "1"})
+		res := s.raw(t, "GET", "/v1/users/me", "", map[string]string{"Authorization": "Bearer " + token, "X-Forwarded-For": randomIP()})
 		if res.headers.Get("RateLimit-Limit") != "5" || res.headers.Get("RateLimit-Remaining") != "4" {
 			t.Fatalf("headers = %v", res.headers)
 		}
 	})
 
 	t.Run("counts concurrent requests exactly", func(t *testing.T) {
-		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "5"})
-		ip := "burst-" + randomHex(6)
+		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "5", "TRUST_PROXY_HOPS": "1"})
+		ip := randomIP()
 		statuses := make([]int, 12)
 		var wg sync.WaitGroup
 		for i := range statuses {
@@ -75,8 +75,8 @@ func TestRateLimits(t *testing.T) {
 	})
 
 	t.Run("starts a new window once the old one ends", func(t *testing.T) {
-		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "1"})
-		ip := "window-" + randomHex(6)
+		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "1", "TRUST_PROXY_HOPS": "1"})
+		ip := randomIP()
 		s.raw(t, "GET", "/v1/notes", "", map[string]string{"X-Forwarded-For": ip})
 		if res := s.raw(t, "GET", "/v1/notes", "", map[string]string{"X-Forwarded-For": ip}); res.status != 429 {
 			t.Fatalf("status = %d", res.status)
@@ -89,9 +89,21 @@ func TestRateLimits(t *testing.T) {
 		}
 	})
 
+	t.Run("ignores X-Forwarded-For by default", func(t *testing.T) {
+		s := newServer(t, nil)
+		spoofed := randomIP()
+		s.raw(t, "GET", "/v1/notes", "", map[string]string{"X-Forwarded-For": spoofed})
+		var spoofedRows, remoteRows int
+		_ = appPool.QueryRow(ctx, "select count(*) from rate_limits where key = $1", "global:"+spoofed).Scan(&spoofedRows)
+		_ = appPool.QueryRow(ctx, "select count(*) from rate_limits where key = 'global:127.0.0.1'").Scan(&remoteRows)
+		if spoofedRows != 0 || remoteRows != 1 {
+			t.Fatalf("counted the spoofed address %d times and the remote address %d times", spoofedRows, remoteRows)
+		}
+	})
+
 	t.Run("never limits health checks", func(t *testing.T) {
-		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "1"})
-		ip := "health-" + randomHex(6)
+		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "1", "TRUST_PROXY_HOPS": "1"})
+		ip := randomIP()
 		for range 3 {
 			if res := s.raw(t, "GET", "/healthz", "", map[string]string{"X-Forwarded-For": ip}); res.status != 200 {
 				t.Fatalf("status = %d", res.status)

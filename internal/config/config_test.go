@@ -16,7 +16,7 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Port != 3000 || cfg.TrustProxy || len(cfg.CORSOrigins) != 0 || cfg.AuthRateLimitPerMinute != 10 || cfg.SessionTTLHours != 168 {
+	if cfg.Port != 3000 || cfg.TrustProxyHops != 0 || len(cfg.CORSOrigins) != 0 || cfg.AuthRateLimitPerMinute != 10 || cfg.SessionTTLHours != 168 {
 		t.Fatalf("cfg = %+v", cfg)
 	}
 }
@@ -33,7 +33,7 @@ func TestLoadRejects(t *testing.T) {
 		"a missing DATABASE_URL": {},
 		"a bad port":             {"DATABASE_URL": dbURL, "PORT": "70000"},
 		"a non-numeric limit":    {"DATABASE_URL": dbURL, "RATE_LIMIT_PER_MINUTE": "many"},
-		"a bad flag":             {"DATABASE_URL": dbURL, "TRUST_PROXY": "yes"},
+		"negative proxy hops":    {"DATABASE_URL": dbURL, "TRUST_PROXY_HOPS": "-1"},
 		"a bad log level":        {"DATABASE_URL": dbURL, "LOG_LEVEL": "loud"},
 	}
 	for label, values := range cases {
@@ -103,5 +103,17 @@ func TestLoadHealthcheck(t *testing.T) {
 	}
 	if _, err := LoadHealthcheck(env(map[string]string{"PORT": "0"})); err == nil {
 		t.Fatal("accepted port 0")
+	}
+}
+
+func TestLoadRejectsTheRemovedTrustProxy(t *testing.T) {
+	_, err := Load(env(map[string]string{"DATABASE_URL": dbURL, "TRUST_PROXY": "true"}))
+	want := "TRUST_PROXY was replaced by TRUST_PROXY_HOPS. Set TRUST_PROXY_HOPS=1 for the old behavior."
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("err = %v", err)
+	}
+	cfg, err := Load(env(map[string]string{"DATABASE_URL": dbURL, "TRUST_PROXY_HOPS": "2"}))
+	if err != nil || cfg.TrustProxyHops != 2 {
+		t.Fatalf("cfg = %+v, %v", cfg, err)
 	}
 }

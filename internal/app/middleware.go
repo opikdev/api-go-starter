@@ -10,6 +10,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/netip"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -181,15 +182,24 @@ func withSpanName(next http.Handler) http.Handler {
 }
 
 type rateLimiter struct {
-	queries    *store.Queries
-	trustProxy bool
+	queries        *store.Queries
+	trustProxyHops int
 }
 
-func (l rateLimiter) clientIP(r *http.Request) string {
-	if l.trustProxy {
-		hops := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
-		if last := strings.TrimSpace(hops[len(hops)-1]); last != "" {
-			return last
+// clientIP takes the address the trusted proxy nearest the client saw: the hops-th
+// X-Forwarded-For entry from the right. With no trusted proxies, or an unusable entry, it uses RemoteAddr.
+func clientIP(r *http.Request, hops int) string {
+	if hops > 0 {
+		var forwarded []string
+		for _, value := range r.Header.Values("X-Forwarded-For") {
+			for _, entry := range strings.Split(value, ",") {
+				forwarded = append(forwarded, strings.TrimSpace(entry))
+			}
+		}
+		if len(forwarded) > 0 {
+			if addr, err := netip.ParseAddr(forwarded[max(0, len(forwarded)-hops)]); err == nil {
+				return addr.String()
+			}
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -201,7 +211,7 @@ func (l rateLimiter) clientIP(r *http.Request) string {
 
 // check counts the request and returns a problem once the client is over the limit.
 func (l rateLimiter) check(r *http.Request, w http.ResponseWriter, name string, limit int) error {
-	hit, err := l.queries.HitRateLimit(r.Context(), name+":"+l.clientIP(r))
+	hit, err := l.queries.HitRateLimit(r.Context(), name+":"+clientIP(r, l.trustProxyHops))
 	if err != nil {
 		return fmt.Errorf("count %s rate limit hit: %w", name, err)
 	}

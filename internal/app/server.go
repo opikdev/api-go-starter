@@ -56,7 +56,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 		return nil, err
 	}
 	queries := store.New(pool)
-	limiter := rateLimiter{queries: queries, trustProxy: cfg.TrustProxy}
+	limiter := rateLimiter{queries: queries, trustProxyHops: cfg.TrustProxyHops}
 	errorHandler := newErrorHandler(logger)
 
 	authLimit := func(next api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
