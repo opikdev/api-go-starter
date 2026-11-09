@@ -131,3 +131,11 @@ func TestLoadDatabasePoolMax(t *testing.T) {
 		t.Fatal("accepted a pool of 0")
 	}
 }
+
+func TestLoadAcceptsEveryDocumentedLogLevel(t *testing.T) {
+	for _, level := range []string{"debug", "info", "warn", "error"} {
+		if cfg, err := Load(env(map[string]string{"DATABASE_URL": dbURL, "LOG_LEVEL": level})); err != nil || cfg.LogLevel != level {
+			t.Errorf("%s: %+v, %v", level, cfg, err)
+		}
+	}
+}
