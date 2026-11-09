@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ func run(m *testing.M) int {
 	parsed, _ := url.Parse(ownerURL)
 	parsed.User = url.UserPassword("api_app", "api_app_dev_password")
 	appURL = parsed.String()
-	appPool, err = database.Open(ctx, appURL, 5000)
+	appPool, err = database.Open(ctx, appURL, 5000, 0)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -133,6 +134,13 @@ func temporaryDatabase(ctx context.Context, admin, initSQL string) (string, func
 	}, nil
 }
 
+func randomIP() string {
+	var raw [16]byte
+	_, _ = rand.Read(raw[:])
+	copy(raw[:], []byte{0x20, 0x01, 0x0d, 0xb8})
+	return netip.AddrFrom16(raw).String()
+}
+
 func randomHex(n int) string {
 	raw := make([]byte, n)
 	_, _ = rand.Read(raw)
@@ -148,7 +156,6 @@ func newServer(t *testing.T, overrides map[string]string) *testServer {
 	t.Helper()
 	env := map[string]string{
 		"DATABASE_URL":               appURL,
-		"TRUST_PROXY":                "true",
 		"RATE_LIMIT_PER_MINUTE":      "100000",
 		"AUTH_RATE_LIMIT_PER_MINUTE": "100000",
 	}
@@ -163,7 +170,7 @@ func newServer(t *testing.T, overrides map[string]string) *testServer {
 	logger := slog.New(slog.NewJSONHandler(&lockedWriter{w: logs}, nil))
 	pool := appPool
 	if url, ok := overrides["DATABASE_URL"]; ok {
-		pool, err = database.Open(context.Background(), url, 200)
+		pool, err = database.Open(context.Background(), url, 200, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -201,7 +208,7 @@ func (s *testServer) client(t *testing.T, opts clientOptions) *apiclient.ClientW
 	t.Helper()
 	ip := opts.ip
 	if ip == "" {
-		ip = "test-" + randomHex(8)
+		ip = randomIP()
 	}
 	client, err := apiclient.NewClientWithResponses(s.URL, apiclient.WithRequestEditorFn(func(_ context.Context, r *http.Request) error {
 		if r.Header.Get("X-Forwarded-For") == "" {
@@ -254,7 +261,7 @@ func (s *testServer) raw(t *testing.T, method, path, body string, headers map[st
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("X-Forwarded-For", "test-"+randomHex(8))
+	request.Header.Set("X-Forwarded-For", randomIP())
 	if body != "" {
 		request.Header.Set("Content-Type", "application/json")
 	}

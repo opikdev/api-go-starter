@@ -19,6 +19,7 @@ type IdempotencyKey struct {
 	ExpiresAt    time.Time
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	Endpoint     string
 }
 
 type Note struct {

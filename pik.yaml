@@ -29,12 +29,17 @@ replace:
       - internal/app/cleanup.go
       - internal/app/database_test.go
       - internal/app/handlers.go
+      - internal/app/health.go
+      - internal/app/idempotency.go
       - internal/app/idempotency_test.go
       - internal/app/main_test.go
       - internal/app/middleware.go
+      - internal/app/notes.go
       - internal/app/notes_test.go
       - internal/app/ratelimit_test.go
       - internal/app/server.go
+      - internal/app/sessions.go
+      - internal/app/users.go
       - internal/app/validation.go
       - internal/database/database.go
       - test/e2e/stack_test.go
@@ -50,9 +55,12 @@ replace:
   - from: api-go-starter
     to: "{{name}}"
     files:
+      - .env.example
       - compose.yaml
       - .devcontainer/devcontainer.json
-      - internal/telemetry/telemetry.go
+      - internal/config/config.go
+      - internal/config/config_test.go
+      - docs/operations.md
   # The module path above may contain the project name, so rename only these exact strings here.
   - from: '"api-go-starter-e2e"'
     to: '"{{name}}-e2e"'

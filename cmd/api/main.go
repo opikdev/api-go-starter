@@ -9,14 +9,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/opikdev/api-go-starter/internal/app"
 	"github.com/opikdev/api-go-starter/internal/config"
 	"github.com/opikdev/api-go-starter/internal/database"
-	"github.com/opikdev/api-go-starter/internal/store"
 	"github.com/opikdev/api-go-starter/internal/telemetry"
 )
 
@@ -24,7 +22,7 @@ const usage = `Usage: api [serve | migrate | seed | healthcheck]
 
   serve        Serve the API (default)
   migrate      Apply migrations, using MIGRATION_DATABASE_URL
-  seed         Add fake demo data, using MIGRATION_DATABASE_URL or DATABASE_URL
+  seed         Add fake demo data when SEED_DEMO_DATA=true, using MIGRATION_DATABASE_URL or DATABASE_URL
   healthcheck  Exit 0 if GET /healthz on PORT succeeds`
 
 const cleanupInterval = time.Hour
@@ -70,11 +68,13 @@ func serve(ctx context.Context) error {
 		return err
 	}
 	logger := newLogger(cfg.LogLevel)
-	shutdownTracing, err := telemetry.Start(ctx)
-	if err != nil {
-		return fmt.Errorf("start tracing: %w", err)
+	shutdownTracing := func(context.Context) error { return nil }
+	if cfg.TracingEnabled {
+		if shutdownTracing, err = telemetry.Start(ctx, cfg.ServiceName); err != nil {
+			return fmt.Errorf("start tracing: %w", err)
+		}
 	}
-	pool, err := database.Open(ctx, cfg.DatabaseURL, cfg.StatementTimeoutMS)
+	pool, err := database.Open(ctx, cfg.DatabaseURL, cfg.StatementTimeoutMS, cfg.DatabasePoolMax)
 	if err != nil {
 		return err
 	}
@@ -91,6 +91,7 @@ func serve(ctx context.Context) error {
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 
 	go func() {
@@ -101,7 +102,7 @@ func serve(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := app.DeleteExpiredRows(ctx, store.New(pool)); err != nil {
+				if err := app.DeleteExpiredRows(ctx, pool); err != nil {
 					logger.Error("Cleanup failed", "err", err)
 				}
 			}
@@ -129,11 +130,11 @@ func serve(ctx context.Context) error {
 }
 
 func migrate(ctx context.Context) error {
-	url := os.Getenv("MIGRATION_DATABASE_URL")
-	if url == "" {
-		return errors.New("MIGRATION_DATABASE_URL is required to run migrations")
+	cfg, err := config.LoadMigrate(nil)
+	if err != nil {
+		return err
 	}
-	if err := database.Migrate(ctx, url); err != nil {
+	if err := database.Migrate(ctx, cfg.DatabaseURL); err != nil {
 		return err
 	}
 	fmt.Println("Migrations applied")
@@ -141,17 +142,14 @@ func migrate(ctx context.Context) error {
 }
 
 func seed(ctx context.Context) error {
-	if os.Getenv("APP_ENV") == "production" && os.Getenv("SEED_DEMO_DATA") != "true" {
-		return errors.New("refusing to seed: APP_ENV is production and SEED_DEMO_DATA is not true")
+	cfg, err := config.LoadSeed(nil)
+	if err != nil {
+		return err
 	}
-	url := os.Getenv("MIGRATION_DATABASE_URL")
-	if url == "" {
-		url = os.Getenv("DATABASE_URL")
+	if !cfg.Enabled {
+		return errors.New("refusing to seed: set SEED_DEMO_DATA=true to add the fake demo user")
 	}
-	if url == "" {
-		return errors.New("MIGRATION_DATABASE_URL or DATABASE_URL is required to seed")
-	}
-	pool, err := database.Open(ctx, url, 30_000)
+	pool, err := database.Open(ctx, cfg.DatabaseURL, 30_000, 0)
 	if err != nil {
 		return err
 	}
@@ -169,17 +167,13 @@ func seed(ctx context.Context) error {
 }
 
 func healthcheck(ctx context.Context) error {
-	port := 3000
-	if raw := os.Getenv("PORT"); raw != "" {
-		parsed, err := strconv.ParseUint(raw, 10, 16)
-		if err != nil {
-			return fmt.Errorf("PORT %q isn't a valid port", raw)
-		}
-		port = int(parsed)
+	cfg, err := config.LoadHealthcheck(nil)
+	if err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	healthURL := fmt.Sprintf("http://127.0.0.1:%d/healthz", port)
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d/healthz", cfg.Port)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil) //nolint:gosec // Always loopback, on a parsed port.
 	if err != nil {
 		return err

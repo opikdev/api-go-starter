@@ -31,8 +31,8 @@ A production-ready Go API: standard library `net/http`, a contract-first OpenAPI
 - After cloning, run `git config core.hooksPath .githooks` once to turn on the hook.
 - Change the API in `api/openapi.yaml` first, then run `make generate` and implement the new `api.StrictServerInterface` methods. Never edit `*.gen.go` or sqlc output by hand.
 - Write queries in `internal/store/queries/`, then run `make generate`. Commit generated code in the same change, or CI fails.
-- Add a new numbered file in `migrations/` for every schema change. Migrations are append-only, so never edit one that's committed.
-- Return `*problem.Error` for every failure, and add new types to `internal/problem/problem.go`, the spec, and `docs/errors.md`.
+- Add a new numbered file in `migrations/` for every schema change. Migrations are append-only, so never edit, delete, or rename one that's committed. `make verify` and CI fail otherwise.
+- Return `*problem.Error` for failures the client can act on, and add new types to `internal/problem/problem.go`, the spec, and `docs/errors.md`. Wrap every other error with `fmt.Errorf("<op>: %w", err)`, so it's logged with context and the client gets a 500.
 - Scope every query on a resource to the caller's user ID. Return 404, not 403, for someone else's resource.
 - Keep imports pointing one way, as `internal/arch_test.go` enforces. `store` and `database` never import `net/http`.
 - Don't edit files listed in `.baseline.sha256`. They come from [opikdev/starters](https://github.com/opikdev/starters).

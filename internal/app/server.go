@@ -25,6 +25,9 @@ import (
 	"github.com/opikdev/api-go-starter/internal/store"
 )
 
+// statusClientClosedRequest is nginx's convention, so access logs tell a client that left apart from a server error.
+const statusClientClosedRequest = 499
+
 var errUnauthorized = errors.New("missing or invalid session token")
 
 var publicAuthOperations = map[string]bool{"CreateUser": true, "CreateSession": true}
@@ -53,7 +56,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 		return nil, err
 	}
 	queries := store.New(pool)
-	limiter := rateLimiter{queries: queries, trustProxy: cfg.TrustProxy}
+	limiter := rateLimiter{queries: queries, trustProxyHops: cfg.TrustProxyHops}
 	errorHandler := newErrorHandler(logger)
 
 	authLimit := func(next api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
@@ -120,6 +123,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 	handler := withHeadAsGet(top)
 	handler = withCORS(cfg.CORSOrigins, handler)
 	handler = withSecurityHeaders(handler)
+	handler = withRecovery(logger, handler)
 	handler = withAccessLog(logger, handler)
 	handler = withRequestID(handler)
 	handler = otelhttp.NewHandler(handler, "http.request")
@@ -136,7 +140,7 @@ func authenticate(ctx context.Context, queries *store.Queries, r *http.Request) 
 		return errUnauthorized
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("find session: %w", err)
 	}
 	state, _ := r.Context().Value(authKey).(*authState)
 	state.user = &AuthenticatedUser{ID: session.ID, Email: session.Email, CreatedAt: session.CreatedAt, SessionID: session.SessionID}
@@ -147,19 +151,30 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		var p *problem.Error
 		if errors.As(err, &p) {
-			if p.Cause != nil && p.Status() >= http.StatusInternalServerError {
+			if !problem.Known(p.Slug) {
+				logger.Error("Unknown problem type, sent as internal-error", "requestId", requestID(r.Context()), "slug", p.Slug)
+			} else if p.Cause != nil && p.Status() >= http.StatusInternalServerError {
 				logger.Warn(p.Detail, "requestId", requestID(r.Context()), "err", p.Cause)
 			}
 			problem.Write(w, r, p)
+			return
+		}
+		if r.Context().Err() != nil && errors.Is(err, context.Canceled) {
+			logger.Debug("Client closed the request", "requestId", requestID(r.Context()), "err", err)
+			w.WriteHeader(statusClientClosedRequest)
 			return
 		}
 		logger.Error("Unhandled error", "requestId", requestID(r.Context()), "err", err)
 		span := trace.SpanFromContext(r.Context())
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "unhandled error")
-		problem.Write(w, r, problem.New(problem.InternalError,
-			fmt.Sprintf("Something went wrong on our side. Retry, and quote request %s if it persists.", requestID(r.Context()))))
+		problem.Write(w, r, internalError(r))
 	}
+}
+
+func internalError(r *http.Request) *problem.Error {
+	return problem.New(problem.InternalError,
+		fmt.Sprintf("Something went wrong on our side. Retry, and quote request %s if it persists.", requestID(r.Context())))
 }
 
 const docsPage = `<!doctype html>

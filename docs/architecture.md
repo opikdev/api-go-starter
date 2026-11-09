@@ -2,13 +2,13 @@
 
 ```mermaid
 flowchart LR
-  C[Client] --> M["Middleware: tracing, request ID, logs, security headers, CORS"]
+  C[Client] --> M["Middleware: tracing, request ID, logs, panic recovery, security headers, CORS"]
   M --> L["/v1: rate limit and body limit"]
   L --> V["OpenAPI validator and auth"]
   V --> H["Strict handlers"]
   H --> S["sqlc queries"]
   S --> P[(Postgres)]
-  H -. "return *problem.Error" .-> E["Error handler"]
+  H -. "return an error" .-> E["Error handler"]
 ```
 
 | Layer | Path | Does | Must not |
@@ -26,9 +26,11 @@ flowchart LR
 ## Key behaviors
 
 - **Contract:** `oapi-codegen` turns the spec into a strict server interface. A handler that's missing or returns the wrong type won't compile. The kin-openapi validator checks every `/v1` request against the spec before it reaches a handler.
-- **Auth:** the validator calls `authenticate` for each operation that declares the `bearer` scheme, and stores the user on the request context. Public operations skip it.
-- **Errors:** every failure is RFC 9457 Problem Details. Unexpected errors are logged and recorded on the trace, and the client only sees a request ID.
+- **Auth:** the validator calls `authenticate` for each operation that declares the `bearerAuth` scheme, and stores the user on the request context. Public operations skip it.
+- **Password hashing:** at most `GOMAXPROCS` argon2id hashes run at once, and the rest wait, because each one takes 19 MiB. A burst of logins queues instead of exhausting memory.
+- **Errors:** every failure is RFC 9457 Problem Details. A handler returns `*problem.Error` for a client mistake. Any other error, or a panic, is logged with a stack for panics, recorded on the trace, and sent as `internal-error` with only a request ID. When the client has disconnected, the error is logged at debug level with status 499 instead.
 - **Authorization:** every note query filters by the caller's user ID, so another user's note looks like it doesn't exist.
 - **Concurrency:** updates need an `If-Match` version, and the check happens inside the `UPDATE` statement.
-- **Idempotency:** the key and the note are written in one transaction. A concurrent duplicate waits for the first to commit, then replays it.
+- **Idempotency:** keys are scoped to the user and the endpoint, such as `POST /v1/notes`, so a key reused on another endpoint never replays this one. The key and the note are written in one transaction. A concurrent duplicate waits for the first to commit, then replays it.
+- **Cleanup:** every hour, each replica tries a Postgres advisory lock. The one that gets it deletes expired sessions, idempotency keys, and rate limit windows in batches of 1,000, so no statement hits the statement timeout.
 - **Database roles:** the API connects as `api_app`, which can read and write rows but can't change the schema. Migrations run as `api_owner`.

@@ -1,9 +1,8 @@
-// Package telemetry sets up OpenTelemetry tracing when an OTLP endpoint is configured.
+// Package telemetry sets up OpenTelemetry tracing.
 package telemetry
 
 import (
 	"context"
-	"os"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -13,23 +12,16 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
-// Start installs a tracer provider that exports over OTLP/HTTP. It does nothing
-// unless OTEL_EXPORTER_OTLP_ENDPOINT is set, and returns a function that flushes spans.
-func Start(ctx context.Context) (func(context.Context) error, error) {
-	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
-		return func(context.Context) error { return nil }, nil
-	}
+// Start installs a tracer provider that exports over OTLP/HTTP, configured by the
+// standard OTEL_EXPORTER_OTLP_* variables, and returns a function that flushes spans.
+func Start(ctx context.Context, serviceName string) (func(context.Context) error, error) {
 	exporter, err := otlptracehttp.New(ctx)
 	if err != nil {
 		return nil, err
 	}
-	name := os.Getenv("OTEL_SERVICE_NAME")
-	if name == "" {
-		name = "api-go-starter"
-	}
 	provider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
-		sdktrace.WithResource(resource.NewSchemaless(semconv.ServiceName(name))),
+		sdktrace.WithResource(resource.NewSchemaless(semconv.ServiceName(serviceName))),
 	)
 	otel.SetTracerProvider(provider)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))

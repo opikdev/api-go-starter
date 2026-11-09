@@ -3,11 +3,14 @@ package app_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/opikdev/api-go-starter/internal/apiclient"
+	"github.com/opikdev/api-go-starter/internal/app"
 	"github.com/opikdev/api-go-starter/internal/publicid"
+	"github.com/opikdev/api-go-starter/internal/store"
 )
 
 func withKey(key string) apiclient.RequestEditorFn {
@@ -106,6 +109,26 @@ func TestIdempotency(t *testing.T) {
 		}
 		if again := post(second, "shared", "Same"); again.JSON201.Id != b.JSON201.Id {
 			t.Fatal("second user got someone else's note")
+		}
+	})
+
+	t.Run("scopes a key to one endpoint", func(t *testing.T) {
+		userID, _ := publicid.Parse(publicid.User, s.signUp(t).userID)
+		queries := store.New(appPool)
+		request := map[string]string{"title": "Same"}
+		notes, _, err := app.ClaimIdempotencyKey(ctx, queries, userID, "POST /v1/notes", "shared", request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := app.SaveIdempotentResponse(ctx, queries, notes, map[string]string{"id": "note_1"}); err != nil {
+			t.Fatal(err)
+		}
+		projects, replay, err := app.ClaimIdempotencyKey(ctx, queries, userID, "POST /v1/projects", "shared", request)
+		if err != nil || replay != nil || projects == notes {
+			t.Fatalf("POST /v1/projects replayed POST /v1/notes: %s %v", replay, err)
+		}
+		if _, replay, _ := app.ClaimIdempotencyKey(ctx, queries, userID, "POST /v1/notes", "shared", request); !strings.Contains(string(replay), "note_1") {
+			t.Fatalf("POST /v1/notes didn't replay its own response: %s", replay)
 		}
 	})
 

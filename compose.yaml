@@ -33,6 +33,7 @@ services:
     command: [seed]
     environment:
       MIGRATION_DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/api?sslmode=disable
+      SEED_DEMO_DATA: "true"
     depends_on:
       migrate:
         condition: service_completed_successfully

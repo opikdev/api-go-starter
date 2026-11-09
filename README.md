@@ -58,7 +58,7 @@ make migrate seed run
 
 | Task | Command |
 |---|---|
-| Run lint, generated-code checks, tests with coverage, and repo checks | `make verify` |
+| Run lint, generated-code and migration checks, tests with coverage, and repo checks | `make verify` |
 | Test the real image end to end | `make e2e` |
 | Regenerate code after changing the spec or a query | `make generate` |
 | Apply migrations, then add demo data | `make migrate seed` |

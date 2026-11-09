@@ -7,25 +7,31 @@ ON CONFLICT (key) DO UPDATE SET
 RETURNING count, reset_at;
 
 -- name: ClaimIdempotencyKey :one
-INSERT INTO idempotency_keys (user_id, key, request_hash, response_body, expires_at)
-VALUES ($1, $2, $3, '{}', now() + interval '24 hours')
-ON CONFLICT (user_id, key) DO NOTHING
+INSERT INTO idempotency_keys (user_id, endpoint, key, request_hash, response_body, expires_at)
+VALUES ($1, $2, $3, $4, '{}', now() + interval '24 hours')
+ON CONFLICT (user_id, endpoint, key) DO NOTHING
 RETURNING id;
 
 -- name: FindIdempotencyKey :one
-SELECT request_hash, response_body FROM idempotency_keys WHERE user_id = $1 AND key = $2;
+SELECT request_hash, response_body FROM idempotency_keys WHERE user_id = $1 AND endpoint = $2 AND key = $3;
 
 -- name: SaveIdempotentResponse :exec
 UPDATE idempotency_keys SET response_body = $2, updated_at = now() WHERE id = $1;
 
--- name: DeleteExpiredSessions :exec
-DELETE FROM sessions WHERE expires_at <= now();
+-- name: TryLockCleanup :one
+SELECT pg_try_advisory_lock(hashtext('delete-expired-rows')) AS locked;
 
--- name: DeleteExpiredIdempotencyKeys :exec
-DELETE FROM idempotency_keys WHERE expires_at <= now();
+-- name: UnlockCleanup :one
+SELECT pg_advisory_unlock(hashtext('delete-expired-rows')) AS unlocked;
 
--- name: DeleteExpiredRateLimits :exec
-DELETE FROM rate_limits WHERE reset_at <= now();
+-- name: DeleteExpiredSessions :execrows
+DELETE FROM sessions WHERE id IN (SELECT id FROM sessions WHERE expires_at <= now() LIMIT $1);
+
+-- name: DeleteExpiredIdempotencyKeys :execrows
+DELETE FROM idempotency_keys WHERE id IN (SELECT id FROM idempotency_keys WHERE expires_at <= now() LIMIT $1);
+
+-- name: DeleteExpiredRateLimits :execrows
+DELETE FROM rate_limits WHERE id IN (SELECT id FROM rate_limits WHERE reset_at <= now() LIMIT $1);
 
 -- name: Ping :one
 SELECT 1::int;

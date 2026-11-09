@@ -3,6 +3,7 @@ package auth
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPasswords(t *testing.T) {
@@ -42,4 +43,30 @@ func TestTokens(t *testing.T) {
 	if other == token {
 		t.Fatal("tokens repeat")
 	}
+}
+
+func TestSemaphoreCapsConcurrency(t *testing.T) {
+	slots := make(semaphore, 2)
+	release := make(chan struct{})
+	started := make(chan int, 3)
+	for i := range 3 {
+		go slots.run(func() {
+			started <- i
+			<-release
+		})
+	}
+	<-started
+	<-started
+	select {
+	case i := <-started:
+		t.Fatalf("function %d ran while two others held both slots", i)
+	case <-time.After(50 * time.Millisecond):
+	}
+	release <- struct{}{}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("the third function never ran after a slot freed up")
+	}
+	close(release)
 }

@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -26,13 +27,31 @@ const (
 
 var encoding = base64.RawStdEncoding
 
+// semaphore runs at most cap(s) functions at once.
+type semaphore chan struct{}
+
+func (s semaphore) run(f func()) {
+	s <- struct{}{}
+	defer func() { <-s }()
+	f()
+}
+
+// argonSlots caps concurrent hashes, because each one allocates argonMemory KiB.
+var argonSlots = make(semaphore, runtime.GOMAXPROCS(0))
+
+func idKey(password, salt []byte, time, memory uint32, threads uint8) []byte {
+	var key []byte
+	argonSlots.run(func() { key = argon2.IDKey(password, salt, time, memory, threads, argonKeyLen) })
+	return key
+}
+
 // HashPassword returns an argon2id hash in PHC string format.
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, saltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
-	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	key := idKey([]byte(password), salt, argonTime, argonMemory, argonThreads)
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argonMemory, argonTime, argonThreads, encoding.EncodeToString(salt), encoding.EncodeToString(key)), nil
 }
@@ -60,7 +79,7 @@ func VerifyPassword(password, encoded string) (bool, error) {
 	if err != nil || len(expected) != argonKeyLen {
 		return false, errors.New("stored password hash has an invalid key")
 	}
-	actual := argon2.IDKey([]byte(password), salt, time, memory, threads, argonKeyLen)
+	actual := idKey([]byte(password), salt, time, memory, threads)
 	return subtle.ConstantTimeCompare(actual, expected) == 1, nil
 }
 
