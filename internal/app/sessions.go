@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -18,7 +19,7 @@ func (h *handlers) CreateSession(ctx context.Context, request api.CreateSessionR
 	user, err := h.queries.FindUserByEmail(ctx, email)
 	found := err == nil
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, err
+		return nil, fmt.Errorf("find user: %w", err)
 	}
 	stored := h.dummyHash
 	if found {
@@ -26,7 +27,7 @@ func (h *handlers) CreateSession(ctx context.Context, request api.CreateSessionR
 	}
 	matches, err := auth.VerifyPassword(request.Body.Password, stored)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("verify password: %w", err)
 	}
 	if !found || !matches {
 		return nil, problem.New(problem.InvalidCredentials, "The email or password is wrong.")
@@ -34,13 +35,13 @@ func (h *handlers) CreateSession(ctx context.Context, request api.CreateSessionR
 
 	token, hash, err := auth.NewToken()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create token: %w", err)
 	}
 	expiresAt, err := h.queries.CreateSession(ctx, store.CreateSessionParams{
 		UserID: user.ID, TokenHash: hash, TtlHours: h.sessionTTLHours,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create session: %w", err)
 	}
 	return api.CreateSession201JSONResponse{
 		Body:    api.Session{Token: token, ExpiresAt: expiresAt.UTC()},
@@ -50,7 +51,7 @@ func (h *handlers) CreateSession(ctx context.Context, request api.CreateSessionR
 
 func (h *handlers) DeleteCurrentSession(ctx context.Context, _ api.DeleteCurrentSessionRequestObject) (api.DeleteCurrentSessionResponseObject, error) {
 	if err := h.queries.DeleteSession(ctx, currentUser(ctx).SessionID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("delete session: %w", err)
 	}
 	return api.DeleteCurrentSession204Response{}, nil
 }

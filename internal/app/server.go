@@ -25,6 +25,9 @@ import (
 	"github.com/opikdev/api-go-starter/internal/store"
 )
 
+// statusClientClosedRequest is nginx's convention, so access logs tell a client that left apart from a server error.
+const statusClientClosedRequest = 499
+
 var errUnauthorized = errors.New("missing or invalid session token")
 
 var publicAuthOperations = map[string]bool{"CreateUser": true, "CreateSession": true}
@@ -137,7 +140,7 @@ func authenticate(ctx context.Context, queries *store.Queries, r *http.Request) 
 		return errUnauthorized
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("find session: %w", err)
 	}
 	state, _ := r.Context().Value(authKey).(*authState)
 	state.user = &AuthenticatedUser{ID: session.ID, Email: session.Email, CreatedAt: session.CreatedAt, SessionID: session.SessionID}
@@ -154,6 +157,11 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 				logger.Warn(p.Detail, "requestId", requestID(r.Context()), "err", p.Cause)
 			}
 			problem.Write(w, r, p)
+			return
+		}
+		if r.Context().Err() != nil && errors.Is(err, context.Canceled) {
+			logger.Debug("Client closed the request", "requestId", requestID(r.Context()), "err", err)
+			w.WriteHeader(statusClientClosedRequest)
 			return
 		}
 		logger.Error("Unhandled error", "requestId", requestID(r.Context()), "err", err)

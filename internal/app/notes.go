@@ -83,7 +83,7 @@ func (h *handlers) CreateNote(ctx context.Context, request api.CreateNoteRequest
 func (h *handlers) createIdempotently(ctx context.Context, key *string, input store.InsertNoteParams) (api.Note, bool, error) {
 	tx, err := h.pool.Begin(ctx)
 	if err != nil {
-		return api.Note{}, false, err
+		return api.Note{}, false, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	queries := h.queries.WithTx(tx)
@@ -92,7 +92,7 @@ func (h *handlers) createIdempotently(ctx context.Context, key *string, input st
 	if key != nil {
 		payload, err := json.Marshal(struct{ Title, Body string }{input.Title, input.Body})
 		if err != nil {
-			return api.Note{}, false, err
+			return api.Note{}, false, fmt.Errorf("encode idempotent request: %w", err)
 		}
 		sum := sha256.Sum256(payload)
 		requestHash := hex.EncodeToString(sum[:])
@@ -112,26 +112,29 @@ func (h *handlers) createIdempotently(ctx context.Context, key *string, input st
 			}
 			return note, true, nil
 		case err != nil:
-			return api.Note{}, false, err
+			return api.Note{}, false, fmt.Errorf("claim idempotency key: %w", err)
 		}
 		claimID = pgtype.UUID{Bytes: id, Valid: true}
 	}
 
 	row, err := queries.InsertNote(ctx, input)
 	if err != nil {
-		return api.Note{}, false, err
+		return api.Note{}, false, fmt.Errorf("insert note: %w", err)
 	}
 	note := presentNote(row)
 	if claimID.Valid {
 		body, err := json.Marshal(note)
 		if err != nil {
-			return api.Note{}, false, err
+			return api.Note{}, false, fmt.Errorf("encode idempotent response: %w", err)
 		}
 		if err := queries.SaveIdempotentResponse(ctx, store.SaveIdempotentResponseParams{ID: claimID.Bytes, ResponseBody: body}); err != nil {
-			return api.Note{}, false, err
+			return api.Note{}, false, fmt.Errorf("save idempotent response: %w", err)
 		}
 	}
-	return note, false, tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return api.Note{}, false, fmt.Errorf("commit note: %w", err)
+	}
+	return note, false, nil
 }
 
 func (h *handlers) ListNotes(ctx context.Context, request api.ListNotesRequestObject) (api.ListNotesResponseObject, error) {
@@ -150,7 +153,7 @@ func (h *handlers) ListNotes(ctx context.Context, request api.ListNotesRequestOb
 
 	rows, err := h.queries.ListNotes(ctx, store.ListNotesParams{UserID: currentUser(ctx).ID, Limit: int32(limit + 1), Cursor: cursor})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list notes: %w", err)
 	}
 	page := api.NoteList{Data: make([]api.Note, 0, limit)}
 	page.Meta.Limit = limit
@@ -174,7 +177,7 @@ func (h *handlers) GetNote(ctx context.Context, request api.GetNoteRequestObject
 		return nil, noteNotFound(request.Id)
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find note: %w", err)
 	}
 	note := presentNote(row)
 	return api.GetNote200JSONResponse{Body: note, Headers: api.GetNote200ResponseHeaders{ETag: etag(note.Version)}}, nil
@@ -223,13 +226,13 @@ func (h *handlers) UpdateNote(ctx context.Context, request api.UpdateNoteRequest
 			return nil, noteNotFound(request.Id)
 		}
 		if findErr != nil {
-			return nil, findErr
+			return nil, fmt.Errorf("find note after a failed update: %w", findErr)
 		}
 		return nil, problem.New(problem.VersionMismatch,
 			fmt.Sprintf("Note %s is at version %d. Fetch it again, then retry.", request.Id, current.Version))
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("update note: %w", err)
 	}
 	note := presentNote(row)
 	return api.UpdateNote200JSONResponse{Body: note, Headers: api.UpdateNote200ResponseHeaders{ETag: etag(note.Version)}}, nil
@@ -242,7 +245,7 @@ func (h *handlers) DeleteNote(ctx context.Context, request api.DeleteNoteRequest
 	}
 	deleted, err := h.queries.DeleteNote(ctx, store.DeleteNoteParams{ID: id, UserID: currentUser(ctx).ID})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("delete note: %w", err)
 	}
 	if deleted == 0 {
 		return nil, noteNotFound(request.Id)

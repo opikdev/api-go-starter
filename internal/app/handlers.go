@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/opikdev/api-go-starter/internal/api"
@@ -21,7 +23,7 @@ var _ api.StrictServerInterface = (*handlers)(nil)
 func newHandlers(pool *pgxpool.Pool, sessionTTLHours int32) (*handlers, error) {
 	dummyHash, err := auth.HashPassword("timing-equalizer")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("hash the timing-equalizer password: %w", err)
 	}
 	return &handlers{pool: pool, queries: store.New(pool), sessionTTLHours: sessionTTLHours, dummyHash: dummyHash}, nil
 }

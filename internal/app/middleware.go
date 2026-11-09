@@ -203,7 +203,7 @@ func (l rateLimiter) clientIP(r *http.Request) string {
 func (l rateLimiter) check(r *http.Request, w http.ResponseWriter, name string, limit int) error {
 	hit, err := l.queries.HitRateLimit(r.Context(), name+":"+l.clientIP(r))
 	if err != nil {
-		return err
+		return fmt.Errorf("count %s rate limit hit: %w", name, err)
 	}
 	resetIn := max(1, int(math.Ceil(time.Until(hit.ResetAt).Seconds())))
 	headers := map[string]string{

@@ -12,7 +12,7 @@ Copy the shape of `notes`: its handlers are in `internal/app/notes.go` and its t
 2. Add a migration, such as `migrations/00002_projects.sql`, with `-- +goose Up` and `-- +goose Down` sections. Give the table a `uuid` primary key that defaults to `uuidv7()`, and a `user_id` column.
 3. Write the queries in `internal/store/queries/projects.sql`. Filter every query by `user_id`.
 4. Run `make generate`. The build now fails until you implement the new `api.StrictServerInterface` methods.
-5. Implement them on `handlers` in a new `internal/app/projects.go`. Format IDs with `publicid`, and return `*problem.Error` for every failure.
+5. Implement them on `handlers` in a new `internal/app/projects.go`. Format IDs with `publicid`. Return `*problem.Error` for failures the client can act on, and wrap other errors with `fmt.Errorf("<op>: %w", err)`.
 6. Add tests next to `internal/app/notes_test.go`, using the generated client in `internal/apiclient`.
 7. Run `make verify`, and add the new error types to `docs/errors.md` if there are any.
 

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -23,14 +24,14 @@ func (h *handlers) CreateUser(ctx context.Context, request api.CreateUserRequest
 	email := strings.ToLower(string(request.Body.Email))
 	hash, err := auth.HashPassword(request.Body.Password)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("hash password: %w", err)
 	}
 	user, err := h.queries.CreateUser(ctx, store.CreateUserParams{Email: email, PasswordHash: hash})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, problem.New(problem.EmailTaken, email+" is already registered. Log in instead.")
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 	return api.CreateUser201JSONResponse(presentUser(publicid.Format(publicid.User, user.ID), user.Email, user.CreatedAt)), nil
 }
