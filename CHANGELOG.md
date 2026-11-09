@@ -18,6 +18,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Fixed
 
+- At most `GOMAXPROCS` argon2id hashes or checks run at once, so a burst of registrations or logins can't use 19 MiB each without limit.
 - The hourly cleanup deletes expired rows in batches of 1,000 under an advisory lock, so one replica runs it at a time and a large backlog can't hit the statement timeout.
 - CORS responses send `Access-Control-Expose-Headers` on the actual response, not only the preflight, and expose `ETag`, `Location`, `X-Request-Id`, `Retry-After`, the `RateLimit-*` headers, `Idempotency-Replayed`, and `WWW-Authenticate`.
 - Idempotency keys are scoped to the user and the endpoint, not just the user, so a key reused on a new idempotent endpoint can't replay a note. **Deploy note:** migration `00003` replaces the unique constraint, so idempotent `POST`s on replicas still running 0.1.x fail until they're replaced.

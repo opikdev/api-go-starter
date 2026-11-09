@@ -27,6 +27,7 @@ flowchart LR
 
 - **Contract:** `oapi-codegen` turns the spec into a strict server interface. A handler that's missing or returns the wrong type won't compile. The kin-openapi validator checks every `/v1` request against the spec before it reaches a handler.
 - **Auth:** the validator calls `authenticate` for each operation that declares the `bearerAuth` scheme, and stores the user on the request context. Public operations skip it.
+- **Password hashing:** at most `GOMAXPROCS` argon2id hashes run at once, and the rest wait, because each one takes 19 MiB. A burst of logins queues instead of exhausting memory.
 - **Errors:** every failure is RFC 9457 Problem Details. A handler returns `*problem.Error` for a client mistake. Any other error, or a panic, is logged with a stack for panics, recorded on the trace, and sent as `internal-error` with only a request ID. When the client has disconnected, the error is logged at debug level with status 499 instead.
 - **Authorization:** every note query filters by the caller's user ID, so another user's note looks like it doesn't exist.
 - **Concurrency:** updates need an `If-Match` version, and the check happens inside the `UPDATE` statement.
