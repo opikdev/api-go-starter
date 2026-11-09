@@ -4,6 +4,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-09
+
 ### Added
 
 - `scripts/check-migrations.sh` fails when a migration on `main` is changed, deleted, or renamed, or when two migrations share a version. `make verify` and CI run it. Without an `origin/main` or `main` ref, it skips with a note.
@@ -17,6 +19,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 - **Breaking:** `seed` adds demo data only when `SEED_DEMO_DATA=true`, and `APP_ENV` is gone. Compose and `.env.example` set the flag for local development.
 - Every command reads its settings through `internal/config`, and `docs/operations.md` documents `OTEL_SERVICE_NAME` and `SEED_DEMO_DATA`.
 - Handlers are split by feature into `health.go`, `users.go`, `sessions.go`, and `notes.go` in `internal/app/`, so a new feature can copy `notes.go`.
+- The agent harness is v0.3.0. Its check also fails when the harness workflow or pre-commit hook is missing or no longer runs the check.
+- `renovate.json` belongs to the project and extends the shared baseline preset. Generated projects extend only `config:recommended`.
 
 ### Fixed
 
