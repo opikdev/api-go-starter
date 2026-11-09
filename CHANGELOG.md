@@ -6,6 +6,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Changed
 
+- **Breaking:** `seed` adds demo data only when `SEED_DEMO_DATA=true`, and `APP_ENV` is gone. Compose and `.env.example` set the flag for local development.
+- Every command reads its settings through `internal/config`, and `docs/operations.md` documents `OTEL_SERVICE_NAME` and `SEED_DEMO_DATA`.
 - Handlers are split by feature into `health.go`, `users.go`, `sessions.go`, and `notes.go` in `internal/app/`, so a new feature can copy `notes.go`.
 
 ### Fixed

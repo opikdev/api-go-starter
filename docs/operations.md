@@ -2,7 +2,7 @@
 
 ## Configure it
 
-Set these on the API process. `.env.example` lists every option with a safe default. The API refuses to start if a value is invalid, and names the variable without echoing it.
+Set these on the API process. `.env.example` lists every option, with values for local development. The API refuses to start if a value is invalid, and names the variable without echoing it.
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
@@ -16,8 +16,9 @@ Set these on the API process. `.env.example` lists every option with a safe defa
 | `SESSION_TTL_HOURS` | number | `168` | Session lifetime |
 | `RATE_LIMIT_PER_MINUTE` | number | `300` | Per client, across `/v1` |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | number | `10` | Per client, on registration and login |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | URL | Empty | Turns on trace and error export |
-| `APP_ENV` | string | Empty | Set to `production` to stop `seed` from adding demo data |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | URL | Empty | Turns on trace and error export. The exporter also reads the other standard `OTEL_EXPORTER_OTLP_*` variables |
+| `OTEL_SERVICE_NAME` | string | `api-go-starter` | Service name on exported traces |
+| `SEED_DEMO_DATA` | boolean | `false` | Set to `true` to let `seed` add the fake demo user. Compose and `.env.example` set it for local development |
 
 Set `TRUST_PROXY` correctly, or every client behind a load balancer shares one rate limit.
 

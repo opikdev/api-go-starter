@@ -54,9 +54,12 @@ replace:
   - from: api-go-starter
     to: "{{name}}"
     files:
+      - .env.example
       - compose.yaml
       - .devcontainer/devcontainer.json
-      - internal/telemetry/telemetry.go
+      - internal/config/config.go
+      - internal/config/config_test.go
+      - docs/operations.md
   # The module path above may contain the project name, so rename only these exact strings here.
   - from: '"api-go-starter-e2e"'
     to: '"{{name}}-e2e"'

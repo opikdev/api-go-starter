@@ -10,7 +10,12 @@ import (
 	"strings"
 )
 
-// Config holds every setting the API reads at startup.
+const (
+	defaultPort        = 3000
+	defaultServiceName = "api-go-starter"
+)
+
+// Config holds every setting the serve command reads at startup.
 type Config struct {
 	Port                   int
 	LogLevel               string
@@ -21,6 +26,24 @@ type Config struct {
 	SessionTTLHours        int32
 	RateLimitPerMinute     int
 	AuthRateLimitPerMinute int
+	TracingEnabled         bool
+	ServiceName            string
+}
+
+// Migrate holds the settings for the migrate command.
+type Migrate struct {
+	DatabaseURL string
+}
+
+// Seed holds the settings for the seed command.
+type Seed struct {
+	DatabaseURL string
+	Enabled     bool
+}
+
+// Healthcheck holds the settings for the healthcheck command.
+type Healthcheck struct {
+	Port int
 }
 
 type reader struct {
@@ -73,14 +96,32 @@ func (r *reader) flag(name string) bool {
 	}
 }
 
-// Load reads the configuration, naming every invalid variable without echoing its value.
-func Load(env func(string) string) (Config, error) {
+func (r *reader) databaseURL(name, value string) {
+	if parsed, err := url.Parse(value); value == "" || err != nil || parsed.Scheme == "" {
+		r.issues = append(r.issues, name+" must be a Postgres URL")
+	}
+}
+
+func (r *reader) err() error {
+	if len(r.issues) > 0 {
+		return errors.New("invalid environment: " + strings.Join(r.issues, "; "))
+	}
+	return nil
+}
+
+func newReader(env func(string) string) *reader {
 	if env == nil {
 		env = os.Getenv
 	}
-	r := &reader{env: env}
+	return &reader{env: env}
+}
+
+// Load reads the serve configuration, naming every invalid variable without echoing its value.
+// A nil env reads the process environment.
+func Load(env func(string) string) (Config, error) {
+	r := newReader(env)
 	cfg := Config{
-		Port:                   r.integer("PORT", 3000, 1, 65535),
+		Port:                   r.integer("PORT", defaultPort, 1, 65535),
 		LogLevel:               r.str("LOG_LEVEL", "info"),
 		DatabaseURL:            r.str("DATABASE_URL", ""),
 		StatementTimeoutMS:     r.integer("DATABASE_STATEMENT_TIMEOUT_MS", 5000, 1, 600_000),
@@ -88,6 +129,8 @@ func Load(env func(string) string) (Config, error) {
 		SessionTTLHours:        r.int32("SESSION_TTL_HOURS", 168, 1, 8760),
 		RateLimitPerMinute:     r.integer("RATE_LIMIT_PER_MINUTE", 300, 1, 1_000_000),
 		AuthRateLimitPerMinute: r.integer("AUTH_RATE_LIMIT_PER_MINUTE", 10, 1, 1_000_000),
+		TracingEnabled:         r.str("OTEL_EXPORTER_OTLP_ENDPOINT", "") != "",
+		ServiceName:            r.str("OTEL_SERVICE_NAME", defaultServiceName),
 	}
 	for _, origin := range strings.Split(r.str("CORS_ORIGINS", ""), ",") {
 		if origin = strings.TrimSpace(origin); origin != "" {
@@ -99,11 +142,45 @@ func Load(env func(string) string) (Config, error) {
 	default:
 		r.issues = append(r.issues, "LOG_LEVEL must be debug, info, warn, or error")
 	}
-	if parsed, err := url.Parse(cfg.DatabaseURL); cfg.DatabaseURL == "" || err != nil || parsed.Scheme == "" {
-		r.issues = append(r.issues, "DATABASE_URL must be a Postgres URL")
+	r.databaseURL("DATABASE_URL", cfg.DatabaseURL)
+	if err := r.err(); err != nil {
+		return Config{}, err
 	}
-	if len(r.issues) > 0 {
-		return Config{}, errors.New("invalid environment: " + strings.Join(r.issues, "; "))
+	return cfg, nil
+}
+
+// LoadMigrate reads the migrate configuration. A nil env reads the process environment.
+func LoadMigrate(env func(string) string) (Migrate, error) {
+	r := newReader(env)
+	cfg := Migrate{DatabaseURL: r.str("MIGRATION_DATABASE_URL", "")}
+	r.databaseURL("MIGRATION_DATABASE_URL", cfg.DatabaseURL)
+	if err := r.err(); err != nil {
+		return Migrate{}, err
+	}
+	return cfg, nil
+}
+
+// LoadSeed reads the seed configuration, preferring MIGRATION_DATABASE_URL over DATABASE_URL.
+// A nil env reads the process environment.
+func LoadSeed(env func(string) string) (Seed, error) {
+	r := newReader(env)
+	cfg := Seed{
+		DatabaseURL: r.str("MIGRATION_DATABASE_URL", r.str("DATABASE_URL", "")),
+		Enabled:     r.flag("SEED_DEMO_DATA"),
+	}
+	r.databaseURL("MIGRATION_DATABASE_URL or DATABASE_URL", cfg.DatabaseURL)
+	if err := r.err(); err != nil {
+		return Seed{}, err
+	}
+	return cfg, nil
+}
+
+// LoadHealthcheck reads the healthcheck configuration. A nil env reads the process environment.
+func LoadHealthcheck(env func(string) string) (Healthcheck, error) {
+	r := newReader(env)
+	cfg := Healthcheck{Port: r.integer("PORT", defaultPort, 1, 65535)}
+	if err := r.err(); err != nil {
+		return Healthcheck{}, err
 	}
 	return cfg, nil
 }

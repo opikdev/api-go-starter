@@ -52,3 +52,56 @@ func TestLoadNamesEveryProblemWithoutSecrets(t *testing.T) {
 		t.Fatal("error contains a secret")
 	}
 }
+
+func TestLoadReadsTracingSettings(t *testing.T) {
+	cfg, _ := Load(env(map[string]string{"DATABASE_URL": dbURL}))
+	if cfg.TracingEnabled || cfg.ServiceName != "api-go-starter" {
+		t.Fatalf("defaults = %+v", cfg)
+	}
+	cfg, _ = Load(env(map[string]string{"DATABASE_URL": dbURL, "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "OTEL_SERVICE_NAME": "billing"}))
+	if !cfg.TracingEnabled || cfg.ServiceName != "billing" {
+		t.Fatalf("cfg = %+v", cfg)
+	}
+}
+
+func TestLoadMigrate(t *testing.T) {
+	cfg, err := LoadMigrate(env(map[string]string{"MIGRATION_DATABASE_URL": dbURL, "DATABASE_URL": "postgres://app@localhost/db"}))
+	if err != nil || cfg.DatabaseURL != dbURL {
+		t.Fatalf("cfg = %+v, %v", cfg, err)
+	}
+	if _, err := LoadMigrate(env(map[string]string{"DATABASE_URL": dbURL})); err == nil || !strings.Contains(err.Error(), "MIGRATION_DATABASE_URL") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestLoadSeed(t *testing.T) {
+	cfg, err := LoadSeed(env(map[string]string{"DATABASE_URL": dbURL}))
+	if err != nil || cfg.Enabled || cfg.DatabaseURL != dbURL {
+		t.Fatalf("seeding must be off by default: %+v, %v", cfg, err)
+	}
+	owner := "postgres://owner@localhost/db"
+	cfg, err = LoadSeed(env(map[string]string{"DATABASE_URL": dbURL, "MIGRATION_DATABASE_URL": owner, "SEED_DEMO_DATA": "true"}))
+	if err != nil || !cfg.Enabled || cfg.DatabaseURL != owner {
+		t.Fatalf("cfg = %+v, %v", cfg, err)
+	}
+	for label, values := range map[string]map[string]string{
+		"no database URL": {"SEED_DEMO_DATA": "true"},
+		"a bad flag":      {"DATABASE_URL": dbURL, "SEED_DEMO_DATA": "yes"},
+	} {
+		if _, err := LoadSeed(env(values)); err == nil {
+			t.Errorf("%s: accepted", label)
+		}
+	}
+}
+
+func TestLoadHealthcheck(t *testing.T) {
+	if cfg, err := LoadHealthcheck(env(nil)); err != nil || cfg.Port != 3000 {
+		t.Fatalf("default = %+v, %v", cfg, err)
+	}
+	if cfg, err := LoadHealthcheck(env(map[string]string{"PORT": "8080"})); err != nil || cfg.Port != 8080 {
+		t.Fatalf("cfg = %+v, %v", cfg, err)
+	}
+	if _, err := LoadHealthcheck(env(map[string]string{"PORT": "0"})); err == nil {
+		t.Fatal("accepted port 0")
+	}
+}
