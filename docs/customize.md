@@ -6,7 +6,7 @@ Projects created with `pik new` are already renamed, including the Go module pat
 
 ## Add a feature
 
-Copy the shape of `notes`. Work from the contract down, and let the compiler tell you what's missing:
+Copy the shape of `notes`: its handlers are in `internal/app/notes.go` and its tests in `internal/app/notes_test.go`. Work from the contract down, and let the compiler tell you what's missing:
 
 1. Add the paths, schemas, and responses to `api/openapi.yaml`. Reuse the shared `components/responses`, and add `security: [{bearerAuth: []}]` to every operation that needs a user.
 2. Add a migration, such as `migrations/00002_projects.sql`, with `-- +goose Up` and `-- +goose Down` sections. Give the table a `uuid` primary key that defaults to `uuidv7()`, and a `user_id` column.
@@ -23,7 +23,7 @@ To put the auth rate limit on a new public operation, add its operation ID to `p
 1. Delete the `/v1/notes` paths and the note schemas from `api/openapi.yaml`.
 2. Delete `internal/store/queries/notes.sql`, then run `make generate`.
 3. Add a migration that drops `notes`, and remove the notes from `Seed` in `internal/database/database.go`.
-4. Delete the note handlers in `internal/app/handlers.go`, `internal/app/notes_test.go`, and the note steps in `test/e2e/stack_test.go`.
+4. Delete `internal/app/notes.go`, `internal/app/notes_test.go`, and the note steps in `test/e2e/stack_test.go`.
 5. Run `make verify`.
 
 ## Remove idempotency

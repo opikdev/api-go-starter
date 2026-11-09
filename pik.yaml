@@ -29,12 +29,16 @@ replace:
       - internal/app/cleanup.go
       - internal/app/database_test.go
       - internal/app/handlers.go
+      - internal/app/health.go
       - internal/app/idempotency_test.go
       - internal/app/main_test.go
       - internal/app/middleware.go
+      - internal/app/notes.go
       - internal/app/notes_test.go
       - internal/app/ratelimit_test.go
       - internal/app/server.go
+      - internal/app/sessions.go
+      - internal/app/users.go
       - internal/app/validation.go
       - internal/database/database.go
       - test/e2e/stack_test.go
