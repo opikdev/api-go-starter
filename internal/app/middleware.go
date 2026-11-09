@@ -126,6 +126,9 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// exposedHeaders lists every response header a browser client may read beyond the CORS-safelisted ones.
+const exposedHeaders = "ETag, Location, X-Request-Id, Retry-After, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Idempotency-Replayed, WWW-Authenticate"
+
 func withCORS(origins []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -135,10 +138,10 @@ func withCORS(origins []string, next http.Handler) http.Handler {
 			if r.Method == http.MethodOptions {
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match")
-				w.Header().Set("Access-Control-Expose-Headers", "ETag, Location, Retry-After")
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
+			w.Header().Set("Access-Control-Expose-Headers", exposedHeaders)
 		}
 		next.ServeHTTP(w, r)
 	})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -84,6 +85,15 @@ func TestHeadersAndCORS(t *testing.T) {
 		res := withCORS.raw(t, "GET", "/v1/notes", "", map[string]string{"Origin": "https://app.example"})
 		if res.headers.Get("Access-Control-Allow-Origin") != "https://app.example" {
 			t.Fatalf("headers = %v", res.headers)
+		}
+	})
+	t.Run("exposes the headers a browser client reads", func(t *testing.T) {
+		res := withCORS.raw(t, "GET", "/v1/notes", "", map[string]string{"Origin": "https://app.example"})
+		exposed := strings.Split(res.headers.Get("Access-Control-Expose-Headers"), ", ")
+		for _, header := range []string{"ETag", "Location", "X-Request-Id", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Idempotency-Replayed", "WWW-Authenticate"} {
+			if !slices.Contains(exposed, header) {
+				t.Errorf("%s isn't exposed: %v", header, exposed)
+			}
 		}
 	})
 	t.Run("answers a preflight", func(t *testing.T) {

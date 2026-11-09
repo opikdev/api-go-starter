@@ -18,6 +18,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Fixed
 
+- CORS responses send `Access-Control-Expose-Headers` on the actual response, not only the preflight, and expose `ETag`, `Location`, `X-Request-Id`, `Retry-After`, the `RateLimit-*` headers, `Idempotency-Replayed`, and `WWW-Authenticate`.
 - Idempotency keys are scoped to the user and the endpoint, not just the user, so a key reused on a new idempotent endpoint can't replay a note. **Deploy note:** migration `00003` replaces the unique constraint, so idempotent `POST`s on replicas still running 0.1.x fail until they're replaced.
 - A request whose client disconnected is logged at debug level with status 499, instead of as an unhandled 500. Handlers wrap unexpected errors with the operation that failed.
 - Creating a note with a NUL character in `title` reports the `title` field, not `body`. Create and update share one note-field check.
