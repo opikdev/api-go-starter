@@ -147,7 +147,9 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		var p *problem.Error
 		if errors.As(err, &p) {
-			if p.Cause != nil && p.Status() >= http.StatusInternalServerError {
+			if !problem.Known(p.Slug) {
+				logger.Error("Unknown problem type, sent as internal-error", "requestId", requestID(r.Context()), "slug", p.Slug)
+			} else if p.Cause != nil && p.Status() >= http.StatusInternalServerError {
 				logger.Warn(p.Detail, "requestId", requestID(r.Context()), "err", p.Cause)
 			}
 			problem.Write(w, r, p)

@@ -71,8 +71,25 @@ func New(slug Slug, detail string) *Error {
 	return &Error{Slug: slug, Detail: detail}
 }
 
-// Status returns the HTTP status for the problem.
-func (e *Error) Status() int { return catalog[e.Slug].status }
+// Known reports whether the slug is in the catalog.
+func Known(slug Slug) bool {
+	_, ok := catalog[slug]
+	return ok
+}
+
+func lookup(slug Slug) (Slug, int, string) {
+	entry, ok := catalog[slug]
+	if !ok {
+		slug, entry = InternalError, catalog[InternalError]
+	}
+	return slug, entry.status, entry.title
+}
+
+// Status returns the HTTP status for the problem, or 500 for a slug that isn't in the catalog.
+func (e *Error) Status() int {
+	_, status, _ := lookup(e.Slug)
+	return status
+}
 
 type body struct {
 	Type     string       `json:"type"`
@@ -83,18 +100,18 @@ type body struct {
 	Errors   []FieldError `json:"errors,omitempty"`
 }
 
-// Write sends the problem as application/problem+json.
+// Write sends the problem as application/problem+json. A slug that isn't in the catalog is sent as internal-error.
 func Write(w http.ResponseWriter, r *http.Request, e *Error) {
-	entry := catalog[e.Slug]
+	slug, status, title := lookup(e.Slug)
 	for name, value := range e.Headers {
 		w.Header().Set(name, value)
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(entry.status)
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body{
-		Type:     "urn:problem:" + string(e.Slug),
-		Title:    entry.title,
-		Status:   entry.status,
+		Type:     "urn:problem:" + string(slug),
+		Title:    title,
+		Status:   status,
 		Detail:   e.Detail,
 		Instance: r.URL.Path,
 		Errors:   e.Errors,
