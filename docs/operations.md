@@ -11,6 +11,7 @@ Set these on the API process. `.env.example` lists every option, with values for
 | `PORT` | number | `3000` | Listen port |
 | `LOG_LEVEL` | string | `info` | `debug`, `info`, `warn`, or `error` |
 | `DATABASE_STATEMENT_TIMEOUT_MS` | number | `5000` | Cancels slow queries |
+| `DATABASE_POOL_MAX` | number, 1 or more | `10` | Most connections the API opens. See below |
 | `CORS_ORIGINS` | list | Empty | Comma-separated browser origins. Empty disables CORS |
 | `TRUST_PROXY_HOPS` | number | `0` | How many proxies in front of the API append to `X-Forwarded-For`. See below |
 | `SESSION_TTL_HOURS` | number | `168` | Session lifetime |
@@ -19,6 +20,8 @@ Set these on the API process. `.env.example` lists every option, with values for
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | URL | Empty | Turns on trace and error export. The exporter also reads the other standard `OTEL_EXPORTER_OTLP_*` variables |
 | `OTEL_SERVICE_NAME` | string | `api-go-starter` | Service name on exported traces |
 | `SEED_DEMO_DATA` | boolean | `false` | Set to `true` to let `seed` add the fake demo user. Compose and `.env.example` set it for local development |
+
+The pool size comes from the first of these that's set: `DATABASE_POOL_MAX`, then `pool_max_conns` in `DATABASE_URL`, then `10`. Other pool and connection parameters in `DATABASE_URL`, such as `connect_timeout`, are kept, and `connect_timeout` defaults to 5 seconds.
 
 Set `TRUST_PROXY_HOPS` to the number of proxies you run in front of the API, or every client behind a load balancer shares one rate limit:
 

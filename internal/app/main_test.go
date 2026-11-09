@@ -57,7 +57,7 @@ func run(m *testing.M) int {
 	parsed, _ := url.Parse(ownerURL)
 	parsed.User = url.UserPassword("api_app", "api_app_dev_password")
 	appURL = parsed.String()
-	appPool, err = database.Open(ctx, appURL, 5000)
+	appPool, err = database.Open(ctx, appURL, 5000, 0)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -170,7 +170,7 @@ func newServer(t *testing.T, overrides map[string]string) *testServer {
 	logger := slog.New(slog.NewJSONHandler(&lockedWriter{w: logs}, nil))
 	pool := appPool
 	if url, ok := overrides["DATABASE_URL"]; ok {
-		pool, err = database.Open(context.Background(), url, 200)
+		pool, err = database.Open(context.Background(), url, 200, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -75,7 +75,7 @@ func serve(ctx context.Context) error {
 			return fmt.Errorf("start tracing: %w", err)
 		}
 	}
-	pool, err := database.Open(ctx, cfg.DatabaseURL, cfg.StatementTimeoutMS)
+	pool, err := database.Open(ctx, cfg.DatabaseURL, cfg.StatementTimeoutMS, cfg.DatabasePoolMax)
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func seed(ctx context.Context) error {
 	if !cfg.Enabled {
 		return errors.New("refusing to seed: set SEED_DEMO_DATA=true to add the fake demo user")
 	}
-	pool, err := database.Open(ctx, cfg.DatabaseURL, 30_000)
+	pool, err := database.Open(ctx, cfg.DatabaseURL, 30_000, 0)
 	if err != nil {
 		return err
 	}

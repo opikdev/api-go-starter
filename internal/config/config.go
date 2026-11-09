@@ -21,6 +21,7 @@ type Config struct {
 	LogLevel               string
 	DatabaseURL            string
 	StatementTimeoutMS     int
+	DatabasePoolMax        int32
 	CORSOrigins            []string
 	TrustProxyHops         int
 	SessionTTLHours        int32
@@ -125,6 +126,7 @@ func Load(env func(string) string) (Config, error) {
 		LogLevel:               r.str("LOG_LEVEL", "info"),
 		DatabaseURL:            r.str("DATABASE_URL", ""),
 		StatementTimeoutMS:     r.integer("DATABASE_STATEMENT_TIMEOUT_MS", 5000, 1, 600_000),
+		DatabasePoolMax:        r.int32("DATABASE_POOL_MAX", 0, 1, 10_000),
 		TrustProxyHops:         r.integer("TRUST_PROXY_HOPS", 0, 0, 100),
 		SessionTTLHours:        r.int32("SESSION_TTL_HOURS", 168, 1, 8760),
 		RateLimitPerMinute:     r.integer("RATE_LIMIT_PER_MINUTE", 300, 1, 1_000_000),

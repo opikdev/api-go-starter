@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -25,14 +26,24 @@ const (
 	DemoPassword = "demo-password-123"
 )
 
-// Open connects a pool that traces queries and cancels slow statements.
-func Open(ctx context.Context, url string, statementTimeoutMS int) (*pgxpool.Pool, error) {
-	cfg, err := pgxpool.ParseConfig(url)
+const defaultPoolMax = 10
+
+// Open connects a pool that traces queries and cancels slow statements. A poolMax above 0
+// sets the pool size. Otherwise the URL's pool_max_conns applies, or 10 if it has none.
+func Open(ctx context.Context, databaseURL string, statementTimeoutMS int, poolMax int32) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse DATABASE_URL: %w", err)
 	}
-	cfg.MaxConns = 10
-	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+	switch {
+	case poolMax > 0:
+		cfg.MaxConns = poolMax
+	case !setsQueryParam(databaseURL, "pool_max_conns"):
+		cfg.MaxConns = defaultPoolMax
+	}
+	if cfg.ConnConfig.ConnectTimeout == 0 {
+		cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+	}
 	cfg.ConnConfig.RuntimeParams["statement_timeout"] = strconv.Itoa(statementTimeoutMS)
 	cfg.ConnConfig.Tracer = otelpgx.NewTracer()
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
@@ -40,6 +51,11 @@ func Open(ctx context.Context, url string, statementTimeoutMS int) (*pgxpool.Poo
 		return nil, fmt.Errorf("create pool: %w", err)
 	}
 	return pool, nil
+}
+
+func setsQueryParam(databaseURL, name string) bool {
+	parsed, err := url.Parse(databaseURL)
+	return err == nil && parsed.Query().Has(name)
 }
 
 // Migrate applies every pending migration as the schema owner.

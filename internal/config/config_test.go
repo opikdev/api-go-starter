@@ -117,3 +117,17 @@ func TestLoadRejectsTheRemovedTrustProxy(t *testing.T) {
 		t.Fatalf("cfg = %+v, %v", cfg, err)
 	}
 }
+
+func TestLoadDatabasePoolMax(t *testing.T) {
+	cfg, _ := Load(env(map[string]string{"DATABASE_URL": dbURL}))
+	if cfg.DatabasePoolMax != 0 {
+		t.Fatalf("an unset DATABASE_POOL_MAX must stay 0, so the URL's pool_max_conns applies: %d", cfg.DatabasePoolMax)
+	}
+	cfg, err := Load(env(map[string]string{"DATABASE_URL": dbURL, "DATABASE_POOL_MAX": "20"}))
+	if err != nil || cfg.DatabasePoolMax != 20 {
+		t.Fatalf("cfg = %+v, %v", cfg, err)
+	}
+	if _, err := Load(env(map[string]string{"DATABASE_URL": dbURL, "DATABASE_POOL_MAX": "0"})); err == nil {
+		t.Fatal("accepted a pool of 0")
+	}
+}
