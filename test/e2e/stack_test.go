@@ -116,11 +116,11 @@ func TestMain(m *testing.M) {
 
 func login(t *testing.T, client *apiclient.ClientWithResponses, email, password string) string {
 	t.Helper()
-	res, err := client.CreateSessionWithResponse(context.Background(), apiclient.Credentials{Email: openapi_types.Email(email), Password: password})
+	res, err := client.CreateSessionWithResponse(context.Background(), apiclient.CreateSession{Email: openapi_types.Email(email), Password: password})
 	if err != nil || res.JSON201 == nil {
 		t.Fatalf("login: %v %s", err, res.Body)
 	}
-	return res.JSON201.Token
+	return *res.JSON201.Token
 }
 
 func authed(t *testing.T, token string) *apiclient.ClientWithResponses {
@@ -133,6 +133,27 @@ func authed(t *testing.T, token string) *apiclient.ClientWithResponses {
 		t.Fatal(err)
 	}
 	return client
+}
+
+func send(t *testing.T, method, path, body string, headers map[string]string) (*http.Response, string) {
+	t.Helper()
+	request, err := http.NewRequest(method, baseURL+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body != "" {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	for key, value := range headers {
+		request.Header.Set(key, value)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	data, _ := io.ReadAll(response.Body)
+	return response, string(data)
 }
 
 func TestStack(t *testing.T) {
@@ -181,6 +202,32 @@ func TestStack(t *testing.T) {
 		}
 		if deleted, _ := client.DeleteNoteWithResponse(ctx, note.JSON201.Id); deleted.StatusCode() != 204 {
 			t.Fatalf("delete: %d", deleted.StatusCode())
+		}
+	})
+
+	t.Run("runs a cookie session for a same-origin browser app", func(t *testing.T) {
+		login, body := send(t, "POST", "/v1/sessions", `{"email":"demo@example.com","password":"demo-password-123","delivery":"cookie"}`, nil)
+		cookies := login.Cookies()
+		if login.StatusCode != 201 || len(cookies) != 1 || strings.Contains(body, "token") {
+			t.Fatalf("login: %d %v %s", login.StatusCode, login.Header, body)
+		}
+		session := cookies[0]
+		if session.Name != "__Host-session" || session.Path != "/" || !session.HttpOnly || !session.Secure || session.SameSite != http.SameSiteStrictMode {
+			t.Fatalf("cookie = %+v", session)
+		}
+		cookie := map[string]string{"Cookie": session.Name + "=" + session.Value}
+		if notes, body := send(t, "GET", "/v1/notes", "", cookie); notes.StatusCode != 200 {
+			t.Fatalf("notes: %d %s", notes.StatusCode, body)
+		}
+		forged, body := send(t, "POST", "/v1/notes", `{"title":"Forged"}`, map[string]string{"Cookie": cookie["Cookie"], "Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"})
+		if forged.StatusCode != 403 || !strings.Contains(body, "urn:problem:forbidden") {
+			t.Fatalf("cross-site write: %d %s", forged.StatusCode, body)
+		}
+		if out, _ := send(t, "DELETE", "/v1/sessions/current", "", cookie); out.StatusCode != 204 || len(out.Cookies()) != 1 || out.Cookies()[0].MaxAge >= 0 {
+			t.Fatalf("logout: %d %v", out.StatusCode, out.Header)
+		}
+		if gone, _ := send(t, "GET", "/v1/users/me", "", cookie); gone.StatusCode != 401 {
+			t.Fatalf("revoked cookie still works: %d", gone.StatusCode)
 		}
 	})
 

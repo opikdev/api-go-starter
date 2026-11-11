@@ -43,15 +43,19 @@ func invalidRequest(err error) *problem.Error {
 func fromValidation(err error) error {
 	var securityErr *openapi3filter.SecurityRequirementsError
 	if errors.As(err, &securityErr) {
+		headers := map[string]string{"WWW-Authenticate": "Bearer"}
 		for _, cause := range securityErr.Errors {
 			if !errors.Is(cause, errUnauthorized) {
 				return cause
 			}
+			if errors.Is(cause, errStaleCookie) {
+				headers["Set-Cookie"] = clearedSessionCookie().String()
+			}
 		}
 		return &problem.Error{
 			Slug:    problem.Unauthorized,
-			Detail:  "Send a valid session token in the Authorization header as `Bearer <token>`.",
-			Headers: map[string]string{"WWW-Authenticate": "Bearer"},
+			Detail:  "Send a valid session token in the Authorization header as `Bearer <token>`, or log in with `delivery: \"cookie\"` from the same origin.",
+			Headers: headers,
 		}
 	}
 	if errors.Is(err, routers.ErrPathNotFound) {

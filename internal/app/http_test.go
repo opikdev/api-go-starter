@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"slices"
 	"strings"
@@ -10,6 +11,9 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"sigs.k8s.io/yaml"
+
+	"github.com/opikdev/api-go-starter/internal/app"
+	"github.com/opikdev/api-go-starter/internal/config"
 )
 
 func TestErrorResponses(t *testing.T) {
@@ -190,13 +194,20 @@ func TestOpenAPI(t *testing.T) {
 			if op.Responses.Value("429") == nil {
 				t.Errorf("%s %s doesn't document 429", method, path)
 			}
-			public := op.OperationID == "createUser" || op.OperationID == "createSession"
-			requiresBearer := op.Security != nil && len(*op.Security) == 1
-			if requiresBearer {
-				_, requiresBearer = (*op.Security)[0]["bearerAuth"]
+			if method != "GET" && op.Responses.Value("403") == nil {
+				t.Errorf("%s %s changes data, so it must document 403 for blocked cross-origin requests", method, path)
 			}
-			if !public && (!requiresBearer || op.Responses.Value("401") == nil) {
-				t.Errorf("%s %s must require bearerAuth and document 401", method, path)
+			public := op.OperationID == "createUser" || op.OperationID == "createSession"
+			var alternatives []string
+			if op.Security != nil {
+				for _, requirement := range *op.Security {
+					for name := range requirement {
+						alternatives = append(alternatives, name)
+					}
+				}
+			}
+			if !public && (!slices.Equal(alternatives, []string{"bearerAuth", "cookieAuth"}) || op.Responses.Value("401") == nil) {
+				t.Errorf("%s %s must accept bearerAuth or cookieAuth and document 401", method, path)
 			}
 		}
 	}
@@ -205,4 +216,65 @@ func TestOpenAPI(t *testing.T) {
 	if docs.status != 200 || !strings.Contains(docs.body, "swagger-ui") {
 		t.Fatalf("docs = %d", docs.status)
 	}
+}
+
+func TestCrossOriginProtection(t *testing.T) {
+	s := newServer(t, map[string]string{"CORS_ORIGINS": "https://app.example"})
+	session := s.cookieLogin(t, s.signUp(t).email)
+
+	for label, c := range map[string]struct {
+		method  string
+		headers map[string]string
+		status  int
+	}{
+		"allows a safe method from another site":         {"GET", map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"}, 200},
+		"allows a trusted origin":                        {"POST", map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://app.example"}, 201},
+		"allows Sec-Fetch-Site same-origin":              {"POST", map[string]string{"Sec-Fetch-Site": "same-origin"}, 201},
+		"allows Sec-Fetch-Site none":                     {"POST", map[string]string{"Sec-Fetch-Site": "none"}, 201},
+		"blocks Sec-Fetch-Site same-site":                {"POST", map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "https://www.app.example"}, 403},
+		"blocks a cross-site cookie POST":                {"POST", map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"}, 403},
+		"allows a client that sends neither header":      {"POST", nil, 201},
+		"allows an Origin that matches Host":             {"POST", map[string]string{"Origin": s.URL}, 201},
+		"blocks an Origin that doesn't match Host":       {"POST", map[string]string{"Origin": "https://evil.example"}, 403},
+		"blocks an untrusted Origin on an older browser": {"DELETE", map[string]string{"Origin": "https://app.example.evil"}, 403},
+	} {
+		t.Run(label, func(t *testing.T) {
+			body := ""
+			if c.method == "POST" {
+				body = `{"title":"From a browser"}`
+			}
+			path := "/v1/notes"
+			if c.method == "DELETE" {
+				path = "/v1/sessions/current"
+			}
+			res := s.raw(t, c.method, path, body, withSession(session, c.headers))
+			if c.status != 403 {
+				if res.status != c.status {
+					t.Fatalf("%d %s", res.status, res.body)
+				}
+				return
+			}
+			expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 403, "forbidden")
+			if !strings.Contains(res.body, "Cross-origin requests that change data are blocked. Send the request from the same origin, or add the origin to CORS_ORIGINS.") {
+				t.Fatalf("detail: %s", res.body)
+			}
+		})
+	}
+
+	t.Run("blocks a cross-site login before checking credentials", func(t *testing.T) {
+		res := s.raw(t, "POST", "/v1/sessions", `{}`, map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"})
+		expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 403, "forbidden")
+	})
+
+	t.Run("refuses to start with an origin it can't trust", func(t *testing.T) {
+		cfg, err := config.Load(func(name string) string {
+			return map[string]string{"DATABASE_URL": appURL, "CORS_ORIGINS": "https://app.example/"}[name]
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := app.New(cfg, appPool, slog.New(slog.DiscardHandler)); err == nil || !strings.Contains(err.Error(), "CORS_ORIGINS") {
+			t.Fatalf("err = %v", err)
+		}
+	})
 }

@@ -14,6 +14,7 @@ const (
 	ValidationFailed     Slug = "validation-failed"
 	InvalidCredentials   Slug = "invalid-credentials" //nolint:gosec // A problem type name, not a credential.
 	Unauthorized         Slug = "unauthorized"
+	Forbidden            Slug = "forbidden"
 	NotFound             Slug = "not-found"
 	MethodNotAllowed     Slug = "method-not-allowed"
 	EmailTaken           Slug = "email-taken"
@@ -34,6 +35,7 @@ var catalog = map[Slug]struct {
 	ValidationFailed:     {http.StatusBadRequest, "Request validation failed"},
 	InvalidCredentials:   {http.StatusUnauthorized, "Invalid credentials"},
 	Unauthorized:         {http.StatusUnauthorized, "Authentication required"},
+	Forbidden:            {http.StatusForbidden, "Forbidden"},
 	NotFound:             {http.StatusNotFound, "Resource not found"},
 	MethodNotAllowed:     {http.StatusMethodNotAllowed, "Method not allowed"},
 	EmailTaken:           {http.StatusConflict, "Email already registered"},

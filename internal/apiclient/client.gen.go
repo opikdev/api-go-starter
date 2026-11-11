@@ -18,6 +18,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for CreateSessionDelivery.
+const (
+	Body   CreateSessionDelivery = "body"
+	Cookie CreateSessionDelivery = "cookie"
+)
+
+// Valid indicates whether the value is a known member of the CreateSessionDelivery enum.
+func (e CreateSessionDelivery) Valid() bool {
+	switch e {
+	case Body:
+		return true
+	case Cookie:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatusStatus.
 const (
 	Ok HealthStatusStatus = "ok"
@@ -38,6 +56,17 @@ type CreateNote struct {
 	Body  *string `json:"body,omitempty"`
 	Title string  `json:"title"`
 }
+
+// CreateSession defines model for CreateSession.
+type CreateSession struct {
+	// Delivery `body` returns the token in the response. `cookie` sets it as the `__Host-session` cookie instead, for a browser app on the same origin as the API.
+	Delivery *CreateSessionDelivery `json:"delivery,omitempty"`
+	Email    openapi_types.Email    `json:"email"`
+	Password string                 `json:"password"`
+}
+
+// CreateSessionDelivery `body` returns the token in the response. `cookie` sets it as the `__Host-session` cookie instead, for a browser app on the same origin as the API.
+type CreateSessionDelivery string
 
 // Credentials defines model for Credentials.
 type Credentials struct {
@@ -91,8 +120,8 @@ type Problem struct {
 type Session struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 
-	// Token Send as `Authorization: Bearer <token>`.
-	Token string `json:"token"`
+	// Token Present when `delivery` is `body`. Send it as `Authorization: Bearer <token>`.
+	Token *string `json:"token,omitempty"`
 }
 
 // UpdateNote defines model for UpdateNote.
@@ -110,6 +139,9 @@ type User struct {
 
 // EmailTaken defines model for EmailTaken.
 type EmailTaken = Problem
+
+// Forbidden defines model for Forbidden.
+type Forbidden = Problem
 
 // IdempotencyKeyReused defines model for IdempotencyKeyReused.
 type IdempotencyKeyReused = Problem
@@ -165,7 +197,7 @@ type CreateNoteJSONRequestBody = CreateNote
 type UpdateNoteJSONRequestBody = UpdateNote
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
-type CreateSessionJSONRequestBody = Credentials
+type CreateSessionJSONRequestBody = CreateSession
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = Credentials
@@ -1276,6 +1308,7 @@ func (r GetReadinessResponse) ContentType() string {
 
 // ListNotesResponse401Headers the declared response headers of an HTTP 401 response for ListNotes
 type ListNotesResponse401Headers struct {
+	SetCookie       *string
 	WWWAuthenticate *string
 }
 
@@ -1359,6 +1392,7 @@ type CreateNoteResponse201Headers struct {
 
 // CreateNoteResponse401Headers the declared response headers of an HTTP 401 response for CreateNote
 type CreateNoteResponse401Headers struct {
+	SetCookie       *string
 	WWWAuthenticate *string
 }
 
@@ -1376,6 +1410,8 @@ type CreateNoteResponse struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthorized
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON415 the response for an HTTP 415 `application/problem+json` response
 	ApplicationproblemJSON415 *UnsupportedMediaType
 	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
@@ -1403,6 +1439,11 @@ func (r CreateNoteResponse) GetApplicationproblemJSON400() *ValidationFailed {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r CreateNoteResponse) GetApplicationproblemJSON401() *Unauthorized {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreateNoteResponse) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON415 returns the response for an HTTP 415 `application/problem+json` response
@@ -1451,6 +1492,7 @@ func (r CreateNoteResponse) ContentType() string {
 
 // DeleteNoteResponse401Headers the declared response headers of an HTTP 401 response for DeleteNote
 type DeleteNoteResponse401Headers struct {
+	SetCookie       *string
 	WWWAuthenticate *string
 }
 
@@ -1464,6 +1506,8 @@ type DeleteNoteResponse struct {
 	HTTPResponse *http.Response
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthorized
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -1477,6 +1521,11 @@ type DeleteNoteResponse struct {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r DeleteNoteResponse) GetApplicationproblemJSON401() *Unauthorized {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeleteNoteResponse) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -1525,6 +1574,7 @@ type GetNoteResponse200Headers struct {
 
 // GetNoteResponse401Headers the declared response headers of an HTTP 401 response for GetNote
 type GetNoteResponse401Headers struct {
+	SetCookie       *string
 	WWWAuthenticate *string
 }
 
@@ -1608,6 +1658,7 @@ type UpdateNoteResponse200Headers struct {
 
 // UpdateNoteResponse401Headers the declared response headers of an HTTP 401 response for UpdateNote
 type UpdateNoteResponse401Headers struct {
+	SetCookie       *string
 	WWWAuthenticate *string
 }
 
@@ -1625,6 +1676,8 @@ type UpdateNoteResponse struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthorized
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *NotFound
 	// ApplicationproblemJSON412 the response for an HTTP 412 `application/problem+json` response
@@ -1656,6 +1709,11 @@ func (r UpdateNoteResponse) GetApplicationproblemJSON400() *ValidationFailed {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r UpdateNoteResponse) GetApplicationproblemJSON401() *Unauthorized {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r UpdateNoteResponse) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -1715,10 +1773,12 @@ func (r UpdateNoteResponse) ContentType() string {
 // CreateSessionResponse201Headers the declared response headers of an HTTP 201 response for CreateSession
 type CreateSessionResponse201Headers struct {
 	CacheControl *string
+	SetCookie    *string
 }
 
 // CreateSessionResponse401Headers the declared response headers of an HTTP 401 response for CreateSession
 type CreateSessionResponse401Headers struct {
+	SetCookie       *string
 	WWWAuthenticate *string
 }
 
@@ -1736,6 +1796,8 @@ type CreateSessionResponse struct {
 	ApplicationproblemJSON400 *ValidationFailed
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthorized
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON415 the response for an HTTP 415 `application/problem+json` response
 	ApplicationproblemJSON415 *UnsupportedMediaType
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
@@ -1761,6 +1823,11 @@ func (r CreateSessionResponse) GetApplicationproblemJSON400() *ValidationFailed 
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r CreateSessionResponse) GetApplicationproblemJSON401() *Unauthorized {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreateSessionResponse) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON415 returns the response for an HTTP 415 `application/problem+json` response
@@ -1802,8 +1869,14 @@ func (r CreateSessionResponse) ContentType() string {
 	return ""
 }
 
+// DeleteCurrentSessionResponse204Headers the declared response headers of an HTTP 204 response for DeleteCurrentSession
+type DeleteCurrentSessionResponse204Headers struct {
+	SetCookie *string
+}
+
 // DeleteCurrentSessionResponse401Headers the declared response headers of an HTTP 401 response for DeleteCurrentSession
 type DeleteCurrentSessionResponse401Headers struct {
+	SetCookie       *string
 	WWWAuthenticate *string
 }
 
@@ -1817,8 +1890,12 @@ type DeleteCurrentSessionResponse struct {
 	HTTPResponse *http.Response
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Unauthorized
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
 	ApplicationproblemJSON429 *RateLimited
+	// Headers204 the parsed response headers for an HTTP 204 response
+	Headers204 *DeleteCurrentSessionResponse204Headers
 	// Headers401 the parsed response headers for an HTTP 401 response
 	Headers401 *DeleteCurrentSessionResponse401Headers
 	// Headers429 the parsed response headers for an HTTP 429 response
@@ -1828,6 +1905,11 @@ type DeleteCurrentSessionResponse struct {
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
 func (r DeleteCurrentSessionResponse) GetApplicationproblemJSON401() *Unauthorized {
 	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeleteCurrentSessionResponse) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
@@ -1876,6 +1958,8 @@ type CreateUserResponse struct {
 	JSON201 *User
 	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationproblemJSON400 *ValidationFailed
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
 	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationproblemJSON409 *EmailTaken
 	// ApplicationproblemJSON415 the response for an HTTP 415 `application/problem+json` response
@@ -1894,6 +1978,11 @@ func (r CreateUserResponse) GetJSON201() *User {
 // GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
 func (r CreateUserResponse) GetApplicationproblemJSON400() *ValidationFailed {
 	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreateUserResponse) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
@@ -1942,6 +2031,7 @@ func (r CreateUserResponse) ContentType() string {
 
 // GetCurrentUserResponse401Headers the declared response headers of an HTTP 401 response for GetCurrentUser
 type GetCurrentUserResponse401Headers struct {
+	SetCookie       *string
 	WWWAuthenticate *string
 }
 
@@ -2327,6 +2417,13 @@ func ParseListNotesResponse(rsp *http.Response) (*ListNotesResponse, error) {
 	switch {
 	case rsp.StatusCode == 401:
 		var headers ListNotesResponse401Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
 		if values := rsp.Header.Values("WWW-Authenticate"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "WWW-Authenticate", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -2385,6 +2482,13 @@ func ParseCreateNoteResponse(rsp *http.Response) (*CreateNoteResponse, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
 		var dest UnsupportedMediaType
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -2435,6 +2539,13 @@ func ParseCreateNoteResponse(rsp *http.Response) (*CreateNoteResponse, error) {
 		response.Headers201 = &headers
 	case rsp.StatusCode == 401:
 		var headers CreateNoteResponse401Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
 		if values := rsp.Header.Values("WWW-Authenticate"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "WWW-Authenticate", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -2482,6 +2593,13 @@ func ParseDeleteNoteResponse(rsp *http.Response) (*DeleteNoteResponse, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -2501,6 +2619,13 @@ func ParseDeleteNoteResponse(rsp *http.Response) (*DeleteNoteResponse, error) {
 	switch {
 	case rsp.StatusCode == 401:
 		var headers DeleteNoteResponse401Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
 		if values := rsp.Header.Values("WWW-Authenticate"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "WWW-Authenticate", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -2581,6 +2706,13 @@ func ParseGetNoteResponse(rsp *http.Response) (*GetNoteResponse, error) {
 		response.Headers200 = &headers
 	case rsp.StatusCode == 401:
 		var headers GetNoteResponse401Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
 		if values := rsp.Header.Values("WWW-Authenticate"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "WWW-Authenticate", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -2639,6 +2771,13 @@ func ParseUpdateNoteResponse(rsp *http.Response) (*UpdateNoteResponse, error) {
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -2689,6 +2828,13 @@ func ParseUpdateNoteResponse(rsp *http.Response) (*UpdateNoteResponse, error) {
 		response.Headers200 = &headers
 	case rsp.StatusCode == 401:
 		var headers UpdateNoteResponse401Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
 		if values := rsp.Header.Values("WWW-Authenticate"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "WWW-Authenticate", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -2747,6 +2893,13 @@ func ParseCreateSessionResponse(rsp *http.Response) (*CreateSessionResponse, err
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
 		var dest UnsupportedMediaType
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -2773,9 +2926,23 @@ func ParseCreateSessionResponse(rsp *http.Response) (*CreateSessionResponse, err
 			}
 			headers.CacheControl = &value
 		}
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
 		response.Headers201 = &headers
 	case rsp.StatusCode == 401:
 		var headers CreateSessionResponse401Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
 		if values := rsp.Header.Values("WWW-Authenticate"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "WWW-Authenticate", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -2823,6 +2990,13 @@ func ParseDeleteCurrentSessionResponse(rsp *http.Response) (*DeleteCurrentSessio
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -2833,8 +3007,25 @@ func ParseDeleteCurrentSessionResponse(rsp *http.Response) (*DeleteCurrentSessio
 	}
 
 	switch {
+	case rsp.StatusCode == 204:
+		var headers DeleteCurrentSessionResponse204Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
+		response.Headers204 = &headers
 	case rsp.StatusCode == 401:
 		var headers DeleteCurrentSessionResponse401Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
 		if values := rsp.Header.Values("WWW-Authenticate"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "WWW-Authenticate", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -2885,6 +3076,13 @@ func ParseCreateUserResponse(rsp *http.Response) (*CreateUserResponse, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest EmailTaken
@@ -2965,6 +3163,13 @@ func ParseGetCurrentUserResponse(rsp *http.Response) (*GetCurrentUserResponse, e
 	switch {
 	case rsp.StatusCode == 401:
 		var headers GetCurrentUserResponse401Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
 		if values := rsp.Header.Values("WWW-Authenticate"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "WWW-Authenticate", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

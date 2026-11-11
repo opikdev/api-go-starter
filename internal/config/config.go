@@ -128,7 +128,7 @@ func Load(env func(string) string) (Config, error) {
 		StatementTimeoutMS:     r.integer("DATABASE_STATEMENT_TIMEOUT_MS", 5000, 1, 600_000),
 		DatabasePoolMax:        r.int32("DATABASE_POOL_MAX", 0, 1, 10_000),
 		TrustProxyHops:         r.integer("TRUST_PROXY_HOPS", 0, 0, 100),
-		SessionTTLHours:        r.int32("SESSION_TTL_HOURS", 168, 1, 8760),
+		SessionTTLHours:        r.int32("SESSION_TTL_HOURS", 168, 1, 9600),
 		RateLimitPerMinute:     r.integer("RATE_LIMIT_PER_MINUTE", 300, 1, 1_000_000),
 		AuthRateLimitPerMinute: r.integer("AUTH_RATE_LIMIT_PER_MINUTE", 10, 1, 1_000_000),
 		TracingEnabled:         r.str("OTEL_EXPORTER_OTLP_ENDPOINT", "") != "",

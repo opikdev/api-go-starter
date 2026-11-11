@@ -3,7 +3,7 @@
 ```mermaid
 flowchart LR
   C[Client] --> M["Middleware: tracing, request ID, logs, panic recovery, security headers, CORS"]
-  M --> L["/v1: rate limit and body limit"]
+  M --> L["/v1: cross-origin protection, rate limit, and body limit"]
   L --> V["OpenAPI validator and auth"]
   V --> H["Strict handlers"]
   H --> S["sqlc queries"]
@@ -26,7 +26,8 @@ flowchart LR
 ## Key behaviors
 
 - **Contract:** `oapi-codegen` turns the spec into a strict server interface. A handler that's missing or returns the wrong type won't compile. The kin-openapi validator checks every `/v1` request against the spec before it reaches a handler.
-- **Auth:** the validator calls `authenticate` for each operation that declares the `bearerAuth` scheme, and stores the user on the request context. Public operations skip it.
+- **Auth:** protected operations accept `bearerAuth` or `cookieAuth`. The validator calls `authenticate` for each scheme in turn, and it stores the user on the request context. A request with an `Authorization` header can only pass `bearerAuth`, so a bad header never falls back to the `__Host-session` cookie. A rejected cookie gets a 401 that clears it. Public operations skip auth.
+- **Cross-origin protection:** `http.CrossOriginProtection` checks every `/v1` request that changes data, before rate limits and auth. It allows `Sec-Fetch-Site: same-origin` or `none`, an `Origin` that matches `Host` or is in `CORS_ORIGINS`, and clients that send neither header. Anything else gets 403 `forbidden`, which stops CSRF with a cookie session, including login CSRF.
 - **Password hashing:** at most `GOMAXPROCS` argon2id hashes run at once, and the rest wait, because each one takes 19 MiB. A burst of logins queues instead of exhausting memory.
 - **Errors:** every failure is RFC 9457 Problem Details. A handler returns `*problem.Error` for a client mistake. Any other error, or a panic, is logged with a stack for panics, recorded on the trace, and sent as `internal-error` with only a request ID. When the client has disconnected, the error is logged at debug level with status 499 instead.
 - **Authorization:** every note query filters by the caller's user ID, so another user's note looks like it doesn't exist.

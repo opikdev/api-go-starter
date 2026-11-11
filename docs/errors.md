@@ -19,7 +19,8 @@ Every error is `application/problem+json` per [RFC 9457](https://www.rfc-editor.
 |---|---|---|
 | `urn:problem:validation-failed` | 400 | A field is invalid, the JSON is malformed, or `limit` is over 100 |
 | `urn:problem:invalid-credentials` | 401 | Wrong email or password |
-| `urn:problem:unauthorized` | 401 | The token is missing, invalid, expired, or revoked |
+| `urn:problem:unauthorized` | 401 | The token or session cookie is missing, invalid, expired, or revoked |
+| `urn:problem:forbidden` | 403 | A browser sent a request that changes data from an origin that isn't the API's and isn't in `CORS_ORIGINS` |
 | `urn:problem:not-found` | 404 | The route or resource doesn't exist, or isn't yours |
 | `urn:problem:method-not-allowed` | 405 | The route exists, but not with this method |
 | `urn:problem:email-taken` | 409 | The email is already registered |
