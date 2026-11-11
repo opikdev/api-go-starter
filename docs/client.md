@@ -36,6 +36,23 @@ if res.JSON201 != nil {
 
 Each response has a typed field per status in the spec, such as `JSON201` or `ApplicationproblemJSON404`, so error bodies are typed as Problem Details too.
 
+## From a browser
+
+A browser app on the API's own origin can keep the token out of JavaScript. Serve the app and the API from one origin, with a reverse proxy that sends a path such as `/api` to the API, because CORS doesn't allow credentials. Then log in with `delivery` set to `cookie`:
+
+```js
+await fetch('/api/v1/sessions', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email, password, delivery: 'cookie' }),
+});
+const me = await fetch('/api/v1/users/me');
+```
+
+The response sets an `HttpOnly`, `Secure`, `SameSite=Strict` cookie named `__Host-session`, and the body has `expiresAt` but no `token`. The browser sends the cookie on every same-origin request. Don't send an `Authorization` header as well, because the API then ignores the cookie. `DELETE /v1/sessions/current` logs out and clears the cookie.
+
+Requests that change data from another origin get 403 `forbidden`, unless that origin is in `CORS_ORIGINS`. Browsers treat `http://localhost` as secure, so the cookie works there in local development. Any other host needs HTTPS.
+
 ## From other languages
 
 Point a generator at the spec, such as [openapi-typescript](https://openapi-ts.dev/) for TypeScript or [openapi-python-client](https://github.com/openapi-generators/openapi-python-client) for Python. Regenerate the client whenever `api/openapi.yaml` changes.

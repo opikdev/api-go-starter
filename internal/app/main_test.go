@@ -242,11 +242,11 @@ func (s *testServer) signUp(t *testing.T) signedUp {
 	if err != nil || created.JSON201 == nil {
 		t.Fatalf("sign up: %v %s", err, created.Body)
 	}
-	session, err := c.CreateSessionWithResponse(ctx, apiclient.Credentials{Email: openapi_types.Email(email), Password: testPassword})
+	session, err := c.CreateSessionWithResponse(ctx, apiclient.CreateSession{Email: openapi_types.Email(email), Password: testPassword})
 	if err != nil || session.JSON201 == nil {
 		t.Fatalf("log in: %v %s", err, session.Body)
 	}
-	return signedUp{email: email, token: session.JSON201.Token, userID: created.JSON201.Id}
+	return signedUp{email: email, token: *session.JSON201.Token, userID: created.JSON201.Id}
 }
 
 type rawResponse struct {

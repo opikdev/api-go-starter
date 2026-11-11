@@ -7,6 +7,18 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 ### Added
 
 - The README explains how to start a project with `pik new` or GitHub's **Use this template**. `pik new` removes that section from the project it creates.
+- Cookie sessions for a browser app on the API's origin. `POST /v1/sessions` takes an optional `delivery`. With `"cookie"`, it sets the token as an `HttpOnly`, `Secure`, `SameSite=Strict` `__Host-session` cookie and leaves `token` out of the body. With `"body"`, the default, it works as before. See [ADR 006](docs/decisions/006-cookie-sessions-for-same-origin-browser-apps.md).
+- Protected routes accept the `__Host-session` cookie, as the `cookieAuth` scheme, when the request has no `Authorization` header. An invalid or expired cookie gets a 401 that clears it, and `DELETE /v1/sessions/current` always clears it.
+- The `urn:problem:forbidden` problem type, with status 403.
+
+### Changed
+
+- `SESSION_TTL_HOURS` accepts up to 9600 (400 days), up from 8760, matching the longest cookie `Max-Age` browsers keep. The API refuses to start above that, so a session cookie never expires before its session.
+
+### Security
+
+- Every `/v1` request that changes data goes through Go's `http.CrossOriginProtection`, before auth and rate limits. Bearer clients that send no `Origin` or `Sec-Fetch-Site` are unaffected, but cross-site browser requests that change data now get 403 `forbidden` unless their origin is in `CORS_ORIGINS`.
+- The API refuses to start when a `CORS_ORIGINS` entry isn't a bare origin such as `https://app.example`, with no path or trailing slash. Such an entry never matched a browser's `Origin` before.
 
 ## [0.2.0] - 2026-11-09
 

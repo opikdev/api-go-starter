@@ -8,6 +8,10 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: __Host-session
   schemas:
     HealthStatus:
       type: object
@@ -89,18 +93,42 @@ components:
         - email
         - password
       additionalProperties: false
+    CreateSession:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          format: email
+          example: ada@example.com
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          example: correct-horse-battery
+        delivery:
+          type: string
+          enum:
+            - body
+            - cookie
+          default: body
+          description: '`body` returns the token in the response. `cookie` sets it as the `__Host-session` cookie instead, for a browser app on the same origin as the API.'
+          example: cookie
+      required:
+        - email
+        - password
+      additionalProperties: false
     Session:
       type: object
       properties:
         token:
           type: string
-          description: 'Send as `Authorization: Bearer <token>`.'
+          description: 'Present when `delivery` is `body`. Send it as `Authorization: Bearer <token>`.'
         expiresAt:
           type: string
           format: date-time
           example: "2026-11-14T15:20:30.000Z"
       required:
-        - token
         - expiresAt
     Note:
       type: object
@@ -204,6 +232,16 @@ components:
           description: '`Bearer`'
           schema:
             type: string
+        Set-Cookie:
+          description: Clears `__Host-session` when the request sent an invalid or expired session cookie
+          schema:
+            type: string
+    Forbidden:
+      description: Cross-origin request blocked
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     NotFound:
       description: Resource not found
       content:
@@ -312,6 +350,8 @@ paths:
                 $ref: '#/components/schemas/User'
         "400":
           $ref: '#/components/responses/ValidationFailed'
+        "403":
+          $ref: '#/components/responses/Forbidden'
         "409":
           $ref: '#/components/responses/EmailTaken'
         "415":
@@ -330,7 +370,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Credentials'
+              $ref: '#/components/schemas/CreateSession'
       responses:
         "201":
           description: Session created
@@ -343,10 +383,16 @@ paths:
               description: '`no-store`'
               schema:
                 type: string
+            Set-Cookie:
+              description: 'When `delivery` is `cookie`: `__Host-session=<token>; Path=/; Max-Age=<SESSION_TTL_HOURS in seconds>; HttpOnly; Secure; SameSite=Strict`'
+              schema:
+                type: string
         "400":
           $ref: '#/components/responses/ValidationFailed'
         "401":
           $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
         "415":
           $ref: '#/components/responses/UnsupportedMediaType'
         "429":
@@ -359,11 +405,19 @@ paths:
         - Auth
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "204":
           description: Session revoked
+          headers:
+            Set-Cookie:
+              description: 'Always clears the session cookie: `__Host-session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`'
+              schema:
+                type: string
         "401":
           $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
         "429":
           $ref: '#/components/responses/RateLimited'
   /v1/users/me:
@@ -374,6 +428,7 @@ paths:
         - Auth
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Current user
@@ -393,6 +448,7 @@ paths:
         - Notes
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - schema:
             type: string
@@ -433,6 +489,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         "401":
           $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
         "415":
           $ref: '#/components/responses/UnsupportedMediaType'
         "422":
@@ -446,6 +504,7 @@ paths:
         - Notes
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - schema:
             type: integer
@@ -484,6 +543,7 @@ paths:
         - Notes
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - schema:
             type: string
@@ -515,6 +575,7 @@ paths:
         - Notes
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - schema:
             type: string
@@ -551,6 +612,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         "401":
           $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
         "404":
           $ref: '#/components/responses/NotFound'
         "412":
@@ -568,6 +631,7 @@ paths:
         - Notes
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - schema:
             type: string
@@ -579,6 +643,8 @@ paths:
           description: Note deleted
         "401":
           $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
         "404":
           $ref: '#/components/responses/NotFound'
         "429":

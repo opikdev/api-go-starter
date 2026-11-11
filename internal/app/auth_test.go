@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -85,7 +86,7 @@ func TestSessions(t *testing.T) {
 
 	t.Run("logs in with a token that isn't stored in plain text", func(t *testing.T) {
 		user := s.signUp(t)
-		res, _ := s.client(t, clientOptions{}).CreateSessionWithResponse(ctx, apiclient.Credentials{Email: openapi_types.Email(user.email), Password: testPassword})
+		res, _ := s.client(t, clientOptions{}).CreateSessionWithResponse(ctx, apiclient.CreateSession{Email: openapi_types.Email(user.email), Password: testPassword})
 		if res.StatusCode() != 201 || res.HTTPResponse.Header.Get("Cache-Control") != "no-store" {
 			t.Fatalf("%d %v", res.StatusCode(), res.HTTPResponse.Header)
 		}
@@ -93,7 +94,7 @@ func TestSessions(t *testing.T) {
 			t.Fatal("expiry is in the past")
 		}
 		var count int
-		_ = appPool.QueryRow(ctx, "select count(*) from sessions where token_hash = $1", res.JSON201.Token).Scan(&count)
+		_ = appPool.QueryRow(ctx, "select count(*) from sessions where token_hash = $1", *res.JSON201.Token).Scan(&count)
 		if count != 0 {
 			t.Fatal("token stored in plain text")
 		}
@@ -101,7 +102,7 @@ func TestSessions(t *testing.T) {
 
 	t.Run("gives a wrong password and an unknown email the same answer", func(t *testing.T) {
 		user := s.signUp(t)
-		for _, creds := range []apiclient.Credentials{
+		for _, creds := range []apiclient.CreateSession{
 			{Email: openapi_types.Email(user.email), Password: "wrong-horse-battery"},
 			{Email: openapi_types.Email(uniqueEmail()), Password: testPassword},
 		} {
@@ -152,7 +153,7 @@ func TestAuthentication(t *testing.T) {
 
 	t.Run("revokes only the current session on logout", func(t *testing.T) {
 		user := s.signUp(t)
-		second, _ := s.client(t, clientOptions{}).CreateSessionWithResponse(ctx, apiclient.Credentials{Email: openapi_types.Email(user.email), Password: testPassword})
+		second, _ := s.client(t, clientOptions{}).CreateSessionWithResponse(ctx, apiclient.CreateSession{Email: openapi_types.Email(user.email), Password: testPassword})
 		out, _ := s.client(t, clientOptions{token: user.token}).DeleteCurrentSessionWithResponse(ctx)
 		if out.StatusCode() != 204 {
 			t.Fatalf("logout: %d", out.StatusCode())
@@ -161,9 +162,151 @@ func TestAuthentication(t *testing.T) {
 		if gone.StatusCode() != 401 {
 			t.Fatalf("revoked token still works: %d", gone.StatusCode())
 		}
-		other, _ := s.client(t, clientOptions{token: second.JSON201.Token}).GetCurrentUserWithResponse(ctx)
+		other, _ := s.client(t, clientOptions{token: *second.JSON201.Token}).GetCurrentUserWithResponse(ctx)
 		if other.StatusCode() != 200 {
 			t.Fatalf("other session: %d", other.StatusCode())
+		}
+	})
+}
+
+const clearedSessionCookie = "__Host-session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict"
+
+var sessionCookiePattern = regexp.MustCompile(`^__Host-session=([A-Za-z0-9_-]{43}); Path=/; Max-Age=604800; HttpOnly; Secure; SameSite=Strict$`)
+
+func loginBody(email, delivery string) string {
+	return `{"email":"` + email + `","password":"` + testPassword + `","delivery":"` + delivery + `"}`
+}
+
+func (s *testServer) cookieLogin(t *testing.T, email string) string {
+	t.Helper()
+	res := s.raw(t, "POST", "/v1/sessions", loginBody(email, "cookie"), nil)
+	match := sessionCookiePattern.FindStringSubmatch(res.headers.Get("Set-Cookie"))
+	if res.status != 201 || match == nil {
+		t.Fatalf("%d %q %s", res.status, res.headers.Get("Set-Cookie"), res.body)
+	}
+	return match[1]
+}
+
+func withSession(value string, headers map[string]string) map[string]string {
+	all := map[string]string{"Cookie": "__Host-session=" + value}
+	for key, header := range headers {
+		all[key] = header
+	}
+	return all
+}
+
+func TestCookieSessions(t *testing.T) {
+	s := newServer(t, nil)
+	ctx := context.Background()
+
+	t.Run("logs in with a host-only HttpOnly cookie and no token in the body", func(t *testing.T) {
+		user := s.signUp(t)
+		res := s.raw(t, "POST", "/v1/sessions", loginBody(user.email, "cookie"), nil)
+		if res.status != 201 || res.headers.Get("Cache-Control") != "no-store" || !sessionCookiePattern.MatchString(res.headers.Get("Set-Cookie")) {
+			t.Fatalf("%d %v %s", res.status, res.headers, res.body)
+		}
+		var body map[string]any
+		if err := json.Unmarshal([]byte(res.body), &body); err != nil {
+			t.Fatal(err)
+		}
+		if _, hasToken := body["token"]; hasToken || body["expiresAt"] == nil {
+			t.Fatalf("body = %s", res.body)
+		}
+	})
+
+	t.Run("still returns the token in the body when delivery is body", func(t *testing.T) {
+		user := s.signUp(t)
+		res := s.raw(t, "POST", "/v1/sessions", loginBody(user.email, "body"), nil)
+		var body struct {
+			Token     string `json:"token"`
+			ExpiresAt string `json:"expiresAt"`
+		}
+		_ = json.Unmarshal([]byte(res.body), &body)
+		if res.status != 201 || body.Token == "" || body.ExpiresAt == "" || res.headers.Get("Set-Cookie") != "" || res.headers.Get("Cache-Control") != "no-store" {
+			t.Fatalf("%d %v %s", res.status, res.headers, res.body)
+		}
+	})
+
+	t.Run("issues a new session on every login", func(t *testing.T) {
+		user := s.signUp(t)
+		first, second := s.cookieLogin(t, user.email), s.cookieLogin(t, user.email)
+		if first == second {
+			t.Fatal("two logins share a session")
+		}
+	})
+
+	t.Run("rejects an unknown delivery", func(t *testing.T) {
+		res := s.raw(t, "POST", "/v1/sessions", loginBody("a@example.com", "header"), nil)
+		expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 400, "validation-failed")
+		expectFieldError(t, res.body, "delivery", "must be one of [body cookie]")
+	})
+
+	t.Run("keeps delivery off registration", func(t *testing.T) {
+		res := s.raw(t, "POST", "/v1/users", loginBody(uniqueEmail(), "cookie"), nil)
+		expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 400, "validation-failed")
+		expectFieldError(t, res.body, "delivery", "isn't a known field")
+	})
+
+	t.Run("authenticates with only the cookie", func(t *testing.T) {
+		user := s.signUp(t)
+		res := s.raw(t, "GET", "/v1/users/me", "", withSession(s.cookieLogin(t, user.email), nil))
+		if res.status != 200 || !strings.Contains(res.body, user.userID) {
+			t.Fatalf("%d %s", res.status, res.body)
+		}
+	})
+
+	t.Run("uses the Authorization header over the cookie", func(t *testing.T) {
+		bearer, cookie := s.signUp(t), s.signUp(t)
+		res := s.raw(t, "GET", "/v1/users/me", "", withSession(s.cookieLogin(t, cookie.email), map[string]string{"Authorization": "Bearer " + bearer.token}))
+		if res.status != 200 || !strings.Contains(res.body, bearer.userID) {
+			t.Fatalf("%d %s", res.status, res.body)
+		}
+	})
+
+	t.Run("never falls back to the cookie when the header is invalid", func(t *testing.T) {
+		user := s.signUp(t)
+		res := s.raw(t, "GET", "/v1/users/me", "", withSession(s.cookieLogin(t, user.email), map[string]string{"Authorization": "Bearer not-a-token"}))
+		expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 401, "unauthorized")
+		if res.headers.Get("Set-Cookie") != "" {
+			t.Fatalf("cleared a valid cookie: %q", res.headers.Get("Set-Cookie"))
+		}
+	})
+
+	t.Run("rejects an expired cookie and clears it", func(t *testing.T) {
+		user := s.signUp(t)
+		session := s.cookieLogin(t, user.email)
+		id, _ := publicid.Parse(publicid.User, user.userID)
+		if _, err := appPool.Exec(ctx, "update sessions set expires_at = now() - interval '1 second' where user_id = $1", id); err != nil {
+			t.Fatal(err)
+		}
+		res := s.raw(t, "GET", "/v1/users/me", "", withSession(session, nil))
+		expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 401, "unauthorized")
+		if res.headers.Get("Set-Cookie") != clearedSessionCookie || res.headers.Get("WWW-Authenticate") != "Bearer" {
+			t.Fatalf("headers = %v", res.headers)
+		}
+		if !strings.Contains(res.body, "or log in with `delivery: \\\"cookie\\\"` from the same origin") {
+			t.Fatalf("detail: %s", res.body)
+		}
+	})
+
+	t.Run("logs out with the cookie, revokes the session, and clears the cookie", func(t *testing.T) {
+		user := s.signUp(t)
+		session := s.cookieLogin(t, user.email)
+		out := s.raw(t, "DELETE", "/v1/sessions/current", "", withSession(session, nil))
+		if out.status != 204 || out.headers.Get("Set-Cookie") != clearedSessionCookie {
+			t.Fatalf("%d %v", out.status, out.headers)
+		}
+		gone := s.raw(t, "GET", "/v1/users/me", "", withSession(session, nil))
+		expectProblem(t, gone.status, gone.headers.Get("Content-Type"), []byte(gone.body), 401, "unauthorized")
+		if gone.headers.Get("Set-Cookie") != clearedSessionCookie {
+			t.Fatalf("Set-Cookie = %q", gone.headers.Get("Set-Cookie"))
+		}
+	})
+
+	t.Run("clears the cookie on a bearer logout too", func(t *testing.T) {
+		out := s.raw(t, "DELETE", "/v1/sessions/current", "", map[string]string{"Authorization": "Bearer " + s.signUp(t).token})
+		if out.status != 204 || out.headers.Get("Set-Cookie") != clearedSessionCookie {
+			t.Fatalf("%d %v", out.status, out.headers)
 		}
 	})
 }

@@ -43,6 +43,15 @@ func TestLoadRejects(t *testing.T) {
 	}
 }
 
+func TestLoadCapsSessionTTLAtTheBrowserCookieLimit(t *testing.T) {
+	if cfg, err := Load(env(map[string]string{"DATABASE_URL": dbURL, "SESSION_TTL_HOURS": "9600"})); err != nil || cfg.SessionTTLHours != 9600 {
+		t.Fatalf("cfg = %+v, %v", cfg, err)
+	}
+	if _, err := Load(env(map[string]string{"DATABASE_URL": dbURL, "SESSION_TTL_HOURS": "9601"})); err == nil || !strings.Contains(err.Error(), "SESSION_TTL_HOURS") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestLoadNamesEveryProblemWithoutSecrets(t *testing.T) {
 	_, err := Load(env(map[string]string{"DATABASE_URL": "not a url secret-value", "PORT": "x"}))
 	if err == nil || !strings.Contains(err.Error(), "PORT") || !strings.Contains(err.Error(), "DATABASE_URL") {

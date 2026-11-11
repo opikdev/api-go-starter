@@ -8,7 +8,7 @@ Projects created with `pik new` are already renamed, including the Go module pat
 
 Copy the shape of `notes`: its handlers are in `internal/app/notes.go` and its tests in `internal/app/notes_test.go`. Work from the contract down, and let the compiler tell you what's missing:
 
-1. Add the paths, schemas, and responses to `api/openapi.yaml`. Reuse the shared `components/responses`, and add `security: [{bearerAuth: []}]` to every operation that needs a user.
+1. Add the paths, schemas, and responses to `api/openapi.yaml`. Reuse the shared `components/responses`, and add `security: [{bearerAuth: []}, {cookieAuth: []}]` to every operation that needs a user. Document a `403` with the shared `Forbidden` response on every operation that changes data.
 2. Add a migration with the next number, such as `migrations/00004_projects.sql`, with `-- +goose Up` and `-- +goose Down` sections. Give the table a `uuid` primary key that defaults to `uuidv7()`, and a `user_id` column.
 3. Write the queries in `internal/store/queries/projects.sql`. Filter every query by `user_id`.
 4. Run `make generate`. The build now fails until you implement the new `api.StrictServerInterface` methods.

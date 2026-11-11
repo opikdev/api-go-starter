@@ -18,7 +18,7 @@ func TestRateLimits(t *testing.T) {
 		s := newServer(t, map[string]string{"AUTH_RATE_LIMIT_PER_MINUTE": "3", "TRUST_PROXY_HOPS": "1"})
 		c := s.client(t, clientOptions{ip: randomIP()})
 		login := func() *apiclient.CreateSessionResponse {
-			res, _ := c.CreateSessionWithResponse(ctx, apiclient.Credentials{Email: openapi_types.Email(uniqueEmail()), Password: testPassword})
+			res, _ := c.CreateSessionWithResponse(ctx, apiclient.CreateSession{Email: openapi_types.Email(uniqueEmail()), Password: testPassword})
 			return res
 		}
 		for range 3 {

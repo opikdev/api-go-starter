@@ -10,7 +10,7 @@ A production-ready Go API you can run with one command and customize with coding
 - **Contract first:** `api/openapi.yaml` is the source of truth. `oapi-codegen` generates a typed server and client from it, and every request is validated against it. Docs are at `/docs`.
 - **Standard library:** `net/http` routing, `log/slog` logs, and no web framework.
 - **Typed SQL:** queries are plain SQL in `internal/store/queries/`, compiled to Go by sqlc and run with pgx.
-- **Auth:** registration, login, and revocable session tokens, with argon2id password hashes and per-user data access.
+- **Auth:** registration, login, and revocable session tokens, sent as a bearer token or an `HttpOnly` cookie, with argon2id password hashes, CSRF protection, and per-user data access.
 - **Reliable by default:** rate limits, idempotency keys, optimistic concurrency, and cursor pagination.
 - **Consistent errors:** RFC 9457 Problem Details everywhere. See the [error reference](docs/errors.md).
 - **Safe data layer:** goose migrations embedded in the binary, constraints in the database, and an app role that can't change the schema.
@@ -43,6 +43,8 @@ curl localhost:3000/v1/notes -H 'Authorization: Bearer <YOUR_TOKEN>'
 ```
 
 If port 3000 or 5432 is taken, set `PORT` or `POSTGRES_PORT` before running Compose.
+
+A browser app can log in with `"delivery":"cookie"` instead, so JavaScript never sees the token. See [Call the API from a browser](docs/client.md#from-a-browser).
 
 ## Start your own project
 

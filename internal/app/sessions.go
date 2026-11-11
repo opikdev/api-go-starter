@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,22 @@ import (
 	"github.com/opikdev/api-go-starter/internal/problem"
 	"github.com/opikdev/api-go-starter/internal/store"
 )
+
+const sessionCookieName = "__Host-session"
+
+func sessionCookie(token string, maxAge int) *http.Cookie {
+	return &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	}
+}
+
+func clearedSessionCookie() *http.Cookie { return sessionCookie("", -1) }
 
 func (h *handlers) CreateSession(ctx context.Context, request api.CreateSessionRequestObject) (api.CreateSessionResponseObject, error) {
 	email := strings.ToLower(string(request.Body.Email))
@@ -43,15 +60,23 @@ func (h *handlers) CreateSession(ctx context.Context, request api.CreateSessionR
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	return api.CreateSession201JSONResponse{
-		Body:    api.Session{Token: token, ExpiresAt: expiresAt.UTC()},
+	response := api.CreateSession201JSONResponse{
+		Body:    api.Session{ExpiresAt: expiresAt.UTC()},
 		Headers: api.CreateSession201ResponseHeaders{CacheControl: ptr("no-store")},
-	}, nil
+	}
+	if request.Body.Delivery != nil && *request.Body.Delivery == api.Cookie {
+		response.Headers.SetCookie = ptr(sessionCookie(token, int(h.sessionTTLHours)*3600).String())
+	} else {
+		response.Body.Token = &token
+	}
+	return response, nil
 }
 
 func (h *handlers) DeleteCurrentSession(ctx context.Context, _ api.DeleteCurrentSessionRequestObject) (api.DeleteCurrentSessionResponseObject, error) {
 	if err := h.queries.DeleteSession(ctx, currentUser(ctx).SessionID); err != nil {
 		return nil, fmt.Errorf("delete session: %w", err)
 	}
-	return api.DeleteCurrentSession204Response{}, nil
+	return api.DeleteCurrentSession204Response{
+		Headers: api.DeleteCurrentSession204ResponseHeaders{SetCookie: ptr(clearedSessionCookie().String())},
+	}, nil
 }
