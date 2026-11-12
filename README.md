@@ -58,7 +58,7 @@ Or select **Use this template** on GitHub. That copy keeps the name `api-go-star
 
 ## Usage
 
-To work on the code, you need Go 1.27 or later, Make, and [golangci-lint](https://golangci-lint.run/) v2:
+To work on the code, you need Go 1.27.4 or later, Make, and [golangci-lint](https://golangci-lint.run/) v2:
 
 ```sh
 cp .env.example .env
