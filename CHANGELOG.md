@@ -19,6 +19,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 - **Breaking:** rate limit headers follow draft-ietf-httpapi-ratelimit-headers. Every `/v1` response sends `RateLimit-Policy`, such as `"global";q=300;w=60`, and `RateLimit`, such as `"global";r=238;t=25`, listing the auth policy too on registration and login. On a 429, `RateLimit` and `Retry-After` describe only the policy that ran out. `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` are gone.
 
+- **Breaking:** `/docs` and `/openapi.json` return 404 unless `DOCS_ENABLED=true`. Compose, the dev container, and `.env.example` turn it on. See [ADR 008](docs/decisions/008-turn-off-api-docs-by-default.md).
+
 ### Fixed
 
 - An oversized chunked body on a protected route returns 413 `payload-too-large`, not a logged 500. Other body read errors return 400.
@@ -31,6 +33,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 - Every `/v1` response sends `Cache-Control: no-store`, not just login.
 - Every response except `/docs` sends `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`.
+- `/docs` serves Swagger UI from files embedded in the binary, with no CDN, under `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`.
 - Rate limits count an IPv6 client by its /64, and an IPv4-mapped IPv6 address as its IPv4 address, so rotating addresses inside one network no longer resets a limit.
 
 ## [0.3.0] - 2026-11-11

@@ -35,6 +35,7 @@ type Config struct {
 	LoginFailureWindowSeconds int32
 	ShutdownDrainSeconds      int
 	ShutdownTimeoutSeconds    int
+	DocsEnabled               bool
 	TracingEnabled            bool
 	ServiceName               string
 }
@@ -143,6 +144,7 @@ func Load(env func(string) string) (Config, error) {
 		LoginFailureWindowSeconds: r.int32("LOGIN_FAILURE_WINDOW_SECONDS", 900, 1, 86_400),
 		ShutdownDrainSeconds:      r.integer("SHUTDOWN_DRAIN_SECONDS", 5, 0, 300),
 		ShutdownTimeoutSeconds:    r.integer("SHUTDOWN_TIMEOUT_SECONDS", MaxRequestSeconds, MaxRequestSeconds, 3600),
+		DocsEnabled:               r.flag("DOCS_ENABLED"),
 		TracingEnabled:            r.str("OTEL_EXPORTER_OTLP_ENDPOINT", "") != "",
 		ServiceName:               r.str("OTEL_SERVICE_NAME", defaultServiceName),
 	}

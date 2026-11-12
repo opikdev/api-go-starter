@@ -142,11 +142,11 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 	})
 
 	top := http.NewServeMux()
-	top.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(specJSON)
-	})
-	top.HandleFunc("GET /docs", serveDocs)
+	if cfg.DocsEnabled {
+		if err := registerDocs(top, spec.Info.Title, specJSON); err != nil {
+			return nil, err
+		}
+	}
 	top.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		state := &authState{}
 		v1.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authKey, state)))
@@ -251,18 +251,4 @@ func constraintProblem(err error) *problem.Error {
 func internalError(r *http.Request) *problem.Error {
 	return problem.New(problem.InternalError,
 		fmt.Sprintf("Something went wrong on our side. Retry, and quote request %s if it persists.", requestID(r.Context())))
-}
-
-const docsPage = `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>API Go starter</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1/swagger-ui.css"></head>
-<body><div id="swagger-ui"></div>
-<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1/swagger-ui-bundle.js"></script>
-<script>SwaggerUIBundle({ url: '/openapi.json', dom_id: '#swagger-ui' });</script>
-</body></html>`
-
-func serveDocs(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(docsPage))
 }

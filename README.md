@@ -7,7 +7,7 @@ A production-ready Go API you can run with one command and customize with coding
 
 ## Features
 
-- **Contract first:** `api/openapi.yaml` is the source of truth. `oapi-codegen` generates a typed server and client from it, and every request is validated against it. Docs are at `/docs`.
+- **Contract first:** `api/openapi.yaml` is the source of truth. `oapi-codegen` generates a typed server and client from it, and every request is validated against it. With `DOCS_ENABLED=true`, as in local development, Swagger UI is at `/docs`, served from the binary.
 - **Standard library:** `net/http` routing, `log/slog` logs, and no web framework.
 - **Typed SQL:** queries are plain SQL in `internal/store/queries/`, compiled to Go by sqlc and run with pgx.
 - **Auth:** registration, login, and revocable session tokens, sent as a bearer token or an `HttpOnly` cookie, with argon2id password hashes, CSRF protection, and per-user data access.

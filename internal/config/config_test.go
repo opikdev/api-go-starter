@@ -17,7 +17,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Port != 3000 || cfg.TrustProxyHops != 0 || len(cfg.CORSOrigins) != 0 || cfg.AuthRateLimitPerMinute != 10 || cfg.SessionTTLHours != 168 ||
-		cfg.LoginFailureLimit != 5 || cfg.LoginFailureWindowSeconds != 900 || cfg.ShutdownDrainSeconds != 5 || cfg.ShutdownTimeoutSeconds != 30 {
+		cfg.LoginFailureLimit != 5 || cfg.LoginFailureWindowSeconds != 900 || cfg.ShutdownDrainSeconds != 5 || cfg.ShutdownTimeoutSeconds != 30 || cfg.DocsEnabled {
 		t.Fatalf("cfg = %+v", cfg)
 	}
 }

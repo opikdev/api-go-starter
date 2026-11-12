@@ -159,6 +159,7 @@ func newServer(t *testing.T, overrides map[string]string) *testServer {
 		"DATABASE_URL":               appURL,
 		"RATE_LIMIT_PER_MINUTE":      "100000",
 		"AUTH_RATE_LIMIT_PER_MINUTE": "100000",
+		"DOCS_ENABLED":               "true",
 	}
 	for key, value := range overrides {
 		env[key] = value

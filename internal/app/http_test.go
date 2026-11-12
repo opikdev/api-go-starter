@@ -272,10 +272,60 @@ func TestOpenAPI(t *testing.T) {
 		}
 	}
 
-	docs := s.raw(t, "GET", "/docs", "", nil)
-	if docs.status != 200 || !strings.Contains(docs.body, "swagger-ui") {
-		t.Fatalf("docs = %d", docs.status)
-	}
+}
+
+func TestDocs(t *testing.T) {
+	s := newServer(t, nil)
+
+	t.Run("serves Swagger UI from this origin under a strict CSP", func(t *testing.T) {
+		docs := s.raw(t, "GET", "/docs", "", nil)
+		if docs.status != 200 || !strings.Contains(docs.body, `<script src="/docs/swagger-ui-bundle.js">`) || strings.Contains(docs.body, "https://") {
+			t.Fatalf("docs = %d %s", docs.status, docs.body)
+		}
+		want := "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		if docs.headers.Get("Content-Security-Policy") != want {
+			t.Fatalf("CSP = %q", docs.headers.Get("Content-Security-Policy"))
+		}
+		for path, contentType := range map[string]string{"/docs/init.js": "text/javascript", "/docs/swagger-ui-bundle.js": "text/javascript", "/docs/swagger-ui.css": "text/css"} {
+			res := s.raw(t, "GET", path, "", nil)
+			if res.status != 200 || !strings.HasPrefix(res.headers.Get("Content-Type"), contentType) || len(res.body) == 0 {
+				t.Errorf("%s = %d %q", path, res.status, res.headers.Get("Content-Type"))
+			}
+		}
+	})
+
+	t.Run("sends Swagger UI gzipped only to clients that accept it", func(t *testing.T) {
+		plain := s.raw(t, "GET", "/docs/swagger-ui.css", "", map[string]string{"Accept-Encoding": "identity"})
+		zipped := s.raw(t, "GET", "/docs/swagger-ui.css", "", map[string]string{"Accept-Encoding": "gzip"})
+		if plain.headers.Get("Content-Encoding") != "" || !strings.Contains(plain.body, ".swagger-ui") {
+			t.Fatalf("identity: %v", plain.headers)
+		}
+		if zipped.headers.Get("Content-Encoding") != "gzip" || !strings.HasPrefix(zipped.body, "\x1f\x8b") {
+			t.Fatalf("gzip: %v", zipped.headers)
+		}
+	})
+
+	t.Run("titles the page after the spec", func(t *testing.T) {
+		source, err := os.ReadFile("../../api/openapi.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec, err := openapi3.NewLoader().LoadFromData(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if docs := s.raw(t, "GET", "/docs", "", nil); !strings.Contains(docs.body, "<title>"+spec.Info.Title+"</title>") {
+			t.Fatalf("docs = %s", docs.body)
+		}
+	})
+
+	t.Run("hides the docs and spec unless DOCS_ENABLED is true", func(t *testing.T) {
+		off := newServer(t, map[string]string{"DOCS_ENABLED": "false"})
+		for _, path := range []string{"/docs", "/openapi.json", "/docs/swagger-ui-bundle.js"} {
+			res := off.raw(t, "GET", path, "", nil)
+			expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 404, "not-found")
+		}
+	})
 }
 
 func TestCrossOriginProtection(t *testing.T) {

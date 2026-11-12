@@ -21,6 +21,7 @@ Set these on the API process. `.env.example` lists every option, with values for
 | `LOGIN_FAILURE_WINDOW_SECONDS` | number, 1 to 86400 | `900` | Window for `LOGIN_FAILURE_LIMIT` |
 | `SHUTDOWN_DRAIN_SECONDS` | number, 0 to 300 | `5` | After `SIGTERM`, how long `/readyz` returns 503 while the API keeps serving, so load balancers stop sending traffic first |
 | `SHUTDOWN_TIMEOUT_SECONDS` | number, 30 to 3600 | `30` | Then, how long in-flight requests get to finish. At least the 30-second write timeout |
+| `DOCS_ENABLED` | boolean | `false` | Serves Swagger UI at `/docs` and the spec at `/openapi.json`. Off, both return 404. Compose and `.env.example` turn it on for local development |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | URL | Empty | Turns on trace and error export. The exporter also reads the other standard `OTEL_EXPORTER_OTLP_*` variables |
 | `OTEL_SERVICE_NAME` | string | `api-go-starter` | Service name on exported traces |
 | `SEED_DEMO_DATA` | boolean | `false` | Set to `true` to let `seed` add the fake demo user. Compose and `.env.example` set it for local development |
