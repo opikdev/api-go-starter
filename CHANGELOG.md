@@ -8,6 +8,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 - Failed logins are limited per account, from any address: after `LOGIN_FAILURE_LIMIT` (default 5) failures in `LOGIN_FAILURE_WINDOW_SECONDS` (default 900), `POST /v1/sessions` returns 429 `rate-limited` without checking the password, whether or not the account exists. A successful login doesn't count. See [ADR 007](docs/decisions/007-key-rate-limits-by-network-and-account.md).
 
+- `migrate` holds a Postgres advisory lock for the whole run, so concurrent runs, such as one per replica, wait in turn instead of failing. It also sets `lock_timeout` to 5 seconds for migration DDL.
+
 ### Changed
 
 - **Breaking:** rate limit headers follow draft-ietf-httpapi-ratelimit-headers. Every `/v1` response sends `RateLimit-Policy`, such as `"global";q=300;w=60`, and `RateLimit`, such as `"global";r=238;t=25`, listing the auth policy too on registration and login. On a 429, `RateLimit` and `Retry-After` describe only the policy that ran out. `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` are gone.

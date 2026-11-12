@@ -42,7 +42,7 @@ Replace the dev passwords in `docker/postgres/init.sql`. Run the file once as th
 
 Pushing a `vX.Y.Z` tag runs every CI check, then publishes an image for amd64 and arm64 to `ghcr.io` if they pass. The binary runs every step, so deploy in this order:
 
-1. Run `/api migrate` with `MIGRATION_DATABASE_URL` set to the owner role.
+1. Run `/api migrate` with `MIGRATION_DATABASE_URL` set to the owner role, as one job per deploy, before the new version takes traffic. It holds a Postgres advisory lock for the whole run, so a second run waits, then finds nothing to do. Running it from every replica is safe too.
 2. Roll out the new image with `DATABASE_URL` set to `api_app`.
 3. Send traffic when `GET /readyz` returns 200.
 
@@ -55,6 +55,7 @@ Treat migrations as append-only and forward-only. `scripts/check-migrations.sh`,
 - Rename or retype a column in steps: add the new one, backfill, switch the code, then drop the old one in a later deploy.
 - Use `CREATE INDEX CONCURRENTLY` on large tables, in a migration marked `-- +goose NO TRANSACTION`.
 - Read the SQL before merging, because a small diff can take a long lock.
+- `migrate` sets `lock_timeout` to 5 seconds, so a migration that can't get its table lock fails instead of queueing every query on that table behind it. Rerun it when traffic is lower.
 
 ## Back up the database
 

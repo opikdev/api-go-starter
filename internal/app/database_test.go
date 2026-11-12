@@ -2,13 +2,16 @@ package app_test
 
 import (
 	"context"
+	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/opikdev/api-go-starter/internal/app"
+	"github.com/opikdev/api-go-starter/internal/database"
 	"github.com/opikdev/api-go-starter/internal/publicid"
 )
 
@@ -182,5 +185,51 @@ func TestMigrations(t *testing.T) {
 		if table.Count != 3 {
 			t.Errorf("table %s needs id, created_at, and updated_at", table.Name)
 		}
+	}
+}
+
+func TestConcurrentMigrations(t *testing.T) {
+	ctx := context.Background()
+	owner, err := pgx.Connect(ctx, ownerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = owner.Close(ctx) }()
+	name := "api_migrate_" + randomHex(6)
+	if _, err := owner.Exec(ctx, "create database "+name); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = owner.Exec(context.Background(), "drop database if exists "+name+" with (force)") })
+	parsed, _ := url.Parse(ownerURL)
+	parsed.Path = "/" + name
+	target := parsed.String()
+
+	errs := make([]error, 3)
+	var wg sync.WaitGroup
+	for i := range errs {
+		wg.Go(func() { errs[i] = database.Migrate(ctx, target) })
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("run %d: %v", i, err)
+		}
+	}
+
+	migrated, err := pgx.Connect(ctx, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = migrated.Close(ctx) }()
+	var applied, latest int
+	if err := migrated.QueryRow(ctx, "select count(*), max(version_id) from goose_db_version where version_id > 0").Scan(&applied, &latest); err != nil {
+		t.Fatal(err)
+	}
+	var constraint bool
+	if err := migrated.QueryRow(ctx, "select exists (select from pg_constraint where conname = 'uq_idempotency_keys_user_id_endpoint_key')").Scan(&constraint); err != nil {
+		t.Fatal(err)
+	}
+	if applied != 3 || latest != 3 || !constraint {
+		t.Fatalf("applied %d migrations up to %d, endpoint constraint %v", applied, latest, constraint)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 
 	"github.com/opikdev/api-go-starter/internal/auth"
 	"github.com/opikdev/api-go-starter/internal/store"
@@ -58,15 +59,22 @@ func setsQueryParam(databaseURL, name string) bool {
 	return err == nil && parsed.Query().Has(name)
 }
 
-// Migrate applies every pending migration as the schema owner.
+// Migrate applies every pending migration as the schema owner. It holds a Postgres advisory lock for the
+// whole run, so a concurrent run waits, then finds nothing to do. DDL gives up after waiting 5 seconds for a
+// table lock, instead of queueing every query on that table behind it.
 func Migrate(ctx context.Context, url string) error {
 	cfg, err := pgx.ParseConfig(url)
 	if err != nil {
 		return fmt.Errorf("parse MIGRATION_DATABASE_URL: %w", err)
 	}
+	cfg.RuntimeParams["lock_timeout"] = "5s"
 	db := stdlib.OpenDB(*cfg)
 	defer func() { _ = db.Close() }()
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return fmt.Errorf("create migration lock: %w", err)
+	}
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS, goose.WithSessionLocker(locker))
 	if err != nil {
 		return fmt.Errorf("load migrations: %w", err)
 	}
