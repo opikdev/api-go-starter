@@ -15,7 +15,13 @@ import (
 const claimIdempotencyKey = `-- name: ClaimIdempotencyKey :one
 INSERT INTO idempotency_keys (user_id, endpoint, key, request_hash, response_body, expires_at)
 VALUES ($1, $2, $3, $4, '{}', now() + interval '24 hours')
-ON CONFLICT (user_id, endpoint, key) DO NOTHING
+ON CONFLICT (user_id, endpoint, key) DO UPDATE SET
+  request_hash = EXCLUDED.request_hash,
+  response_body = EXCLUDED.response_body,
+  expires_at = EXCLUDED.expires_at,
+  created_at = now(),
+  updated_at = now()
+WHERE idempotency_keys.expires_at <= now()
 RETURNING id
 `
 

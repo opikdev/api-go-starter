@@ -119,9 +119,14 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "SAMEORIGIN")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		if !isDocsPath(r.URL.Path) {
+			h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
+
+func isDocsPath(path string) bool { return path == "/docs" || strings.HasPrefix(path, "/docs/") }
 
 // exposedHeaders lists every response header a browser client may read beyond the CORS-safelisted ones.
 const exposedHeaders = "ETag, Location, X-Request-Id, Retry-After, RateLimit, RateLimit-Policy, Idempotency-Replayed, WWW-Authenticate"

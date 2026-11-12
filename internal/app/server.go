@@ -12,6 +12,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -136,6 +137,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 			apiHandler.ServeHTTP(w, r)
 			return
 		}
+		w.Header().Set("Cache-Control", "no-store")
 		protected.ServeHTTP(w, r.WithContext(withRateLimitHeaders(r.Context())))
 	})
 
@@ -164,7 +166,8 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 // can only pass bearerAuth, so a bad header never falls back to the cookie.
 func authenticate(ctx context.Context, queries *store.Queries, r *http.Request, scheme string) error {
 	header := r.Header.Get("Authorization")
-	token, found := strings.CutPrefix(header, "Bearer ")
+	authScheme, token, found := strings.Cut(header, " ")
+	found = found && strings.EqualFold(authScheme, "Bearer")
 	failure := errUnauthorized
 	if scheme == "cookieAuth" {
 		cookie, err := r.Cookie(sessionCookieName)
@@ -200,6 +203,11 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 			problem.Write(w, r, p)
 			return
 		}
+		if p := constraintProblem(err); p != nil {
+			logger.WarnContext(r.Context(), "A database constraint rejected the request", "requestId", requestID(r.Context()), "err", err)
+			problem.Write(w, r, p)
+			return
+		}
 		if r.Context().Err() != nil && errors.Is(err, context.Canceled) {
 			logger.Debug("Client closed the request", "requestId", requestID(r.Context()), "err", err)
 			w.WriteHeader(statusClientClosedRequest)
@@ -211,6 +219,33 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 		span.SetStatus(codes.Error, "unhandled error")
 		problem.Write(w, r, internalError(r))
 	}
+}
+
+// Postgres SQLSTATE codes for constraint violations.
+const (
+	pgUniqueViolation     = "23505"
+	pgForeignKeyViolation = "23503"
+	pgCheckViolation      = "23514"
+)
+
+// constraintProblem maps a constraint violation that no handler expected to a problem, without naming the
+// constraint or quoting SQL.
+func constraintProblem(err error) *problem.Error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return nil
+	}
+	switch pgErr.Code {
+	case pgUniqueViolation, pgForeignKeyViolation:
+		return problem.New(problem.Conflict, "The change conflicts with the current data, such as a record another request just created or deleted. Fetch the current state, then retry.")
+	case pgCheckViolation:
+		return &problem.Error{
+			Slug:       problem.ValidationFailed,
+			Detail:     "A value breaks a data rule. Check the fields against the API docs, then retry.",
+			HTTPStatus: http.StatusUnprocessableEntity,
+		}
+	}
+	return nil
 }
 
 func internalError(r *http.Request) *problem.Error {

@@ -12,12 +12,25 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 - Graceful drain on `SIGTERM` or `SIGINT`: `/readyz` returns 503 for `SHUTDOWN_DRAIN_SECONDS` (default 5) while requests are still served, then in-flight requests get `SHUTDOWN_TIMEOUT_SECONDS` (default 30, up from a fixed 10, and never below the write timeout) before the cleanup job, pool, and telemetry close. Compose sets `stop_grace_period: 40s`.
 
+- The `urn:problem:conflict` problem type, with status 409. A unique or foreign key violation that no handler expected returns it instead of a 500, and a check violation returns 422 `validation-failed`, with no constraint name or SQL in `detail`.
+- `docs/customize.md` shows how to load related data for a page without a query per row.
+
 ### Changed
 
 - **Breaking:** rate limit headers follow draft-ietf-httpapi-ratelimit-headers. Every `/v1` response sends `RateLimit-Policy`, such as `"global";q=300;w=60`, and `RateLimit`, such as `"global";r=238;t=25`, listing the auth policy too on registration and login. On a 429, `RateLimit` and `Retry-After` describe only the policy that ran out. `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` are gone.
 
+### Fixed
+
+- An oversized chunked body on a protected route returns 413 `payload-too-large`, not a logged 500. Other body read errors return 400.
+- `PATCH /v1/notes/{id}` runs its update and the version lookup behind a mismatch in one transaction.
+- An idempotency key past its 24-hour expiry counts as unused, so it's claimed again instead of replaying an old response.
+- The idempotency fingerprint hashes the method, path, and the whole validated body as canonical JSON, so a field added later is covered. A replay of a request sent before this release gets 422 `idempotency-key-reused` instead.
+- The `Authorization` scheme matches `Bearer` in any case, as RFC 9110 requires.
+
 ### Security
 
+- Every `/v1` response sends `Cache-Control: no-store`, not just login.
+- Every response except `/docs` sends `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`.
 - Rate limits count an IPv6 client by its /64, and an IPv4-mapped IPv6 address as its IPv4 address, so rotating addresses inside one network no longer resets a limit.
 
 ## [0.3.0] - 2026-11-11

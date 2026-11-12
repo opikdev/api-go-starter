@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,16 +16,15 @@ import (
 	"github.com/opikdev/api-go-starter/internal/store"
 )
 
-// claimIdempotencyKey claims a key for one user on one endpoint, such as "POST /v1/notes". Call it in the
-// transaction that does the work. If the key was already used there with the same request, it returns the
-// stored response to replay instead of a claim.
-func claimIdempotencyKey(ctx context.Context, queries *store.Queries, userID uuid.UUID, endpoint, key string, request any) (uuid.UUID, []byte, error) {
-	payload, err := json.Marshal(request)
+// claimIdempotencyKey claims a key for one user on one endpoint, given as its method and path, such as
+// "POST /v1/notes". Call it in the transaction that does the work, with the validated request body. If the key
+// was already used there with the same request, it returns the stored response to replay instead of a claim.
+// A key past its expiry counts as unused.
+func claimIdempotencyKey(ctx context.Context, queries *store.Queries, userID uuid.UUID, endpoint, key string, body any) (uuid.UUID, []byte, error) {
+	requestHash, err := requestFingerprint(endpoint, body)
 	if err != nil {
-		return uuid.Nil, nil, fmt.Errorf("encode idempotent request: %w", err)
+		return uuid.Nil, nil, err
 	}
-	sum := sha256.Sum256(payload)
-	requestHash := hex.EncodeToString(sum[:])
 
 	id, err := queries.ClaimIdempotencyKey(ctx, store.ClaimIdempotencyKeyParams{UserID: userID, Endpoint: endpoint, Key: key, RequestHash: requestHash})
 	if err == nil {
@@ -41,6 +41,27 @@ func claimIdempotencyKey(ctx context.Context, queries *store.Queries, userID uui
 		return uuid.Nil, nil, problem.New(problem.IdempotencyKeyReused, "This Idempotency-Key was used with a different request body. Use a new key.")
 	}
 	return uuid.Nil, original.ResponseBody, nil
+}
+
+// requestFingerprint hashes the endpoint and the body as canonical JSON, with sorted keys and no whitespace,
+// so a field added to the body later is covered with no change here.
+func requestFingerprint(endpoint string, body any) (string, error) {
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("encode idempotent request: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.UseNumber()
+	var generic any
+	if err := decoder.Decode(&generic); err != nil {
+		return "", fmt.Errorf("decode idempotent request: %w", err)
+	}
+	canonical, err := json.Marshal(generic)
+	if err != nil {
+		return "", fmt.Errorf("encode canonical idempotent request: %w", err)
+	}
+	sum := sha256.Sum256(append([]byte(endpoint+"\n"), canonical...))
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // saveIdempotentResponse stores the response a later replay of the claimed key returns.

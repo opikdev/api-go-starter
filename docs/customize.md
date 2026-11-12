@@ -16,7 +16,16 @@ Copy the shape of `notes`: its handlers are in `internal/app/notes.go` and its t
 6. Add tests next to `internal/app/notes_test.go`, using the generated client in `internal/apiclient`.
 7. Run `make verify`, and add the new error types to `docs/errors.md` if there are any.
 
-To make a new `POST` idempotent, call `claimIdempotencyKey` and `saveIdempotentResponse` from `internal/app/idempotency.go` in the handler's transaction, as `createIdempotently` does, with the operation's own method and route, such as `POST /v1/projects`.
+To make a new `POST` idempotent, call `claimIdempotencyKey` and `saveIdempotentResponse` from `internal/app/idempotency.go` in the handler's transaction, as `createIdempotently` does. Pass the operation's method and path, such as `POST /v1/projects`, and the request body as validated. The key's fingerprint covers the whole body, so new fields need no change there.
+
+Run every handler that writes more than one statement, or reads after a write to explain a failure, in one transaction, as `updateNote` does.
+
+### Load related data
+
+`presentNote` turns one row into one response and runs no queries. Keep it that way when a resource gains related data, such as a note's tags, because a query per row turns a page of 100 into 101 queries:
+
+- For one-to-one data, `JOIN` it into the list query, so each row arrives complete.
+- For one-to-many data, load the page first, then fetch the related rows for every ID on it in one query, such as `SELECT * FROM note_tags WHERE note_id = ANY(sqlc.arg(note_ids)::uuid[])`. Group them by note ID in Go, then pass each group to the presenter.
 
 To put the auth rate limit on a new public operation, add its operation ID to `publicAuthOperations` in `internal/app/server.go`.
 

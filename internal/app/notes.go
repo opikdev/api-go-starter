@@ -68,7 +68,7 @@ func (h *handlers) CreateNote(ctx context.Context, request api.CreateNoteRequest
 		return nil, err
 	}
 
-	note, replayed, err := h.createIdempotently(ctx, request.Params.IdempotencyKey, input)
+	note, replayed, err := h.createIdempotently(ctx, request.Params.IdempotencyKey, request.Body, input)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (h *handlers) CreateNote(ctx context.Context, request api.CreateNoteRequest
 
 const createNoteEndpoint = "POST /v1/notes"
 
-func (h *handlers) createIdempotently(ctx context.Context, key *string, input store.InsertNoteParams) (api.Note, bool, error) {
+func (h *handlers) createIdempotently(ctx context.Context, key *string, body *api.CreateNote, input store.InsertNoteParams) (api.Note, bool, error) {
 	tx, err := h.pool.Begin(ctx)
 	if err != nil {
 		return api.Note{}, false, fmt.Errorf("begin transaction: %w", err)
@@ -91,7 +91,7 @@ func (h *handlers) createIdempotently(ctx context.Context, key *string, input st
 
 	var claimID uuid.UUID
 	if key != nil {
-		id, replay, err := claimIdempotencyKey(ctx, queries, input.UserID, createNoteEndpoint, *key, struct{ Title, Body string }{input.Title, input.Body})
+		id, replay, err := claimIdempotencyKey(ctx, queries, input.UserID, createNoteEndpoint, *key, body)
 		if err != nil {
 			return api.Note{}, false, err
 		}
@@ -202,24 +202,43 @@ func (h *handlers) UpdateNote(ctx context.Context, request api.UpdateNoteRequest
 		return nil, err
 	}
 
-	userID := currentUser(ctx).ID
-	row, err := h.queries.UpdateNote(ctx, store.UpdateNoteParams{ID: id, UserID: userID, Version: version, Title: patch.Title, Body: patch.Body})
-	if errors.Is(err, pgx.ErrNoRows) {
-		current, findErr := h.queries.FindNote(ctx, store.FindNoteParams{ID: id, UserID: userID})
-		if errors.Is(findErr, pgx.ErrNoRows) {
-			return nil, noteNotFound(request.Id)
-		}
-		if findErr != nil {
-			return nil, fmt.Errorf("find note after a failed update: %w", findErr)
-		}
-		return nil, problem.New(problem.VersionMismatch,
-			fmt.Sprintf("Note %s is at version %d. Fetch it again, then retry.", request.Id, current.Version))
-	}
+	row, err := h.updateNote(ctx, request.Id, store.UpdateNoteParams{ID: id, UserID: currentUser(ctx).ID, Version: version, Title: patch.Title, Body: patch.Body})
 	if err != nil {
-		return nil, fmt.Errorf("update note: %w", err)
+		return nil, err
 	}
 	note := presentNote(row)
 	return api.UpdateNote200JSONResponse{Body: note, Headers: api.UpdateNote200ResponseHeaders{ETag: etag(note.Version)}}, nil
+}
+
+// updateNote applies the patch, or reports why it couldn't, from one transaction, so the version in a
+// mismatch is the one the update saw.
+func (h *handlers) updateNote(ctx context.Context, publicID string, params store.UpdateNoteParams) (store.Note, error) {
+	tx, err := h.pool.Begin(ctx)
+	if err != nil {
+		return store.Note{}, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := h.queries.WithTx(tx)
+
+	row, err := queries.UpdateNote(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		current, findErr := queries.FindNote(ctx, store.FindNoteParams{ID: params.ID, UserID: params.UserID})
+		if errors.Is(findErr, pgx.ErrNoRows) {
+			return store.Note{}, noteNotFound(publicID)
+		}
+		if findErr != nil {
+			return store.Note{}, fmt.Errorf("find note after a failed update: %w", findErr)
+		}
+		return store.Note{}, problem.New(problem.VersionMismatch,
+			fmt.Sprintf("Note %s is at version %d. Fetch it again, then retry.", publicID, current.Version))
+	}
+	if err != nil {
+		return store.Note{}, fmt.Errorf("update note: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return store.Note{}, fmt.Errorf("commit note update: %w", err)
+	}
+	return row, nil
 }
 
 func (h *handlers) DeleteNote(ctx context.Context, request api.DeleteNoteRequestObject) (api.DeleteNoteResponseObject, error) {

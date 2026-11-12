@@ -112,6 +112,23 @@ func TestHeadersAndCORS(t *testing.T) {
 		}
 	})
 
+	t.Run("sends a strict CSP and keeps /v1 responses out of caches", func(t *testing.T) {
+		health := s.raw(t, "GET", "/healthz", "", nil)
+		notes := s.raw(t, "GET", "/v1/notes", "", nil)
+		for _, res := range []rawResponse{health, notes} {
+			if res.headers.Get("Content-Security-Policy") != "default-src 'none'; frame-ancestors 'none'" {
+				t.Fatalf("CSP = %q", res.headers.Get("Content-Security-Policy"))
+			}
+		}
+		if notes.status != 401 || notes.headers.Get("Cache-Control") != "no-store" {
+			t.Fatalf("%d Cache-Control = %q", notes.status, notes.headers.Get("Cache-Control"))
+		}
+		token := s.signUp(t).token
+		if res := s.raw(t, "GET", "/v1/notes", "", map[string]string{"Authorization": "Bearer " + token}); res.headers.Get("Cache-Control") != "no-store" {
+			t.Fatalf("Cache-Control = %q", res.headers.Get("Cache-Control"))
+		}
+	})
+
 	withCORS := newServer(t, map[string]string{"CORS_ORIGINS": "https://app.example"})
 	t.Run("allows a listed origin", func(t *testing.T) {
 		res := withCORS.raw(t, "GET", "/v1/notes", "", map[string]string{"Origin": "https://app.example"})
