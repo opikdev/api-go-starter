@@ -35,7 +35,7 @@ func invalidRequest(err error) *problem.Error {
 	return &problem.Error{
 		Slug:   problem.ValidationFailed,
 		Detail: invalidFieldsDetail,
-		Errors: []problem.FieldError{{Field: "body", Detail: "isn't valid JSON for this operation"}},
+		Errors: []problem.FieldError{{Field: "", Detail: "isn't valid JSON for this operation"}},
 		Cause:  err,
 	}
 }
@@ -52,7 +52,7 @@ func fromValidation(err error) error {
 		return &problem.Error{
 			Slug:   problem.ValidationFailed,
 			Detail: invalidFieldsDetail,
-			Errors: []problem.FieldError{{Field: "body", Detail: "couldn't be read"}},
+			Errors: []problem.FieldError{{Field: "", Detail: "couldn't be read"}},
 			Cause:  err,
 		}
 	}
@@ -123,7 +123,7 @@ func fieldErrors(err error) []problem.FieldError {
 		}
 		var parseErr *openapi3filter.ParseError
 		if requestErr.Parameter == nil && errors.As(requestErr.Err, &parseErr) {
-			out = append(out, problem.FieldError{Field: "body", Detail: "isn't valid JSON"})
+			out = append(out, problem.FieldError{Field: "", Detail: "isn't valid JSON"})
 			continue
 		}
 		found := false
@@ -168,7 +168,7 @@ func fieldName(parameter *openapi3.Parameter, location []string) string {
 		return parameter.Name
 	}
 	if len(location) == 0 {
-		return "body"
+		return ""
 	}
 	return strings.Join(location, ".")
 }

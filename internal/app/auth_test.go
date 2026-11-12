@@ -63,7 +63,7 @@ func TestRegistration(t *testing.T) {
 		"a very long email": {`{"email":"` + strings.Repeat("a", 250) + `@example.com","password":"` + testPassword + `"}`, "email", "must be at most 254 characters"},
 		"an unknown field":  {`{"email":"a@example.com","password":"` + testPassword + `","isAdmin":true}`, "isAdmin", "isn't a known field"},
 		"a wrong type":      {`{"email":5,"password":"` + testPassword + `"}`, "email", "must be string"},
-		"malformed JSON":    {`{"email":`, "body", "isn't valid JSON"},
+		"malformed JSON":    {`{"email":`, "", "isn't valid JSON"},
 	} {
 		t.Run("rejects "+label, func(t *testing.T) {
 			res := s.raw(t, "POST", "/v1/users", c.body, nil)

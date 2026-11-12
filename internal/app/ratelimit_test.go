@@ -50,8 +50,12 @@ func TestRateLimits(t *testing.T) {
 		token := newServer(t, nil).signUp(t).token
 		s := newServer(t, map[string]string{"RATE_LIMIT_PER_MINUTE": "5", "AUTH_RATE_LIMIT_PER_MINUTE": "3", "TRUST_PROXY_HOPS": "1"})
 		res := s.raw(t, "GET", "/v1/users/me", "", map[string]string{"Authorization": "Bearer " + token, "X-Forwarded-For": randomIP()})
-		if res.headers.Get("RateLimit-Policy") != `"global";q=5;w=60` || !regexp.MustCompile(`^"global";r=4;t=(60|59)$`).MatchString(res.headers.Get("RateLimit")) {
+		match := regexp.MustCompile(`^"global";r=4;t=(\d+)$`).FindStringSubmatch(res.headers.Get("RateLimit"))
+		if res.headers.Get("RateLimit-Policy") != `"global";q=5;w=60` || match == nil {
 			t.Fatalf("headers = %v", res.headers)
+		}
+		if reset, _ := strconv.Atoi(match[1]); reset < 1 || reset > 60 {
+			t.Fatalf("t = %d, outside the 60-second window", reset)
 		}
 		for _, old := range []string{"RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"} {
 			if res.headers.Get(old) != "" {

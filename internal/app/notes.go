@@ -193,7 +193,7 @@ func (h *handlers) UpdateNote(ctx context.Context, request api.UpdateNoteRequest
 	}
 	patch := request.Body
 	if patch.Title == nil && patch.Body == nil {
-		return nil, validationProblem("body", "needs title, body, or both")
+		return nil, validationProblem("", "needs title, body, or both")
 	}
 	if patch.Title != nil {
 		patch.Title = ptr(strings.TrimSpace(*patch.Title))

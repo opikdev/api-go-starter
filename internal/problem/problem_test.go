@@ -23,14 +23,6 @@ func TestWriteSendsAnUnknownSlugAsInternalError(t *testing.T) {
 	}
 }
 
-func TestWriteUsesAnOverriddenStatus(t *testing.T) {
-	w := httptest.NewRecorder()
-	Write(w, httptest.NewRequest("POST", "/v1/notes", nil), &Error{Slug: ValidationFailed, Detail: "x", HTTPStatus: 422})
-	if w.Code != 422 || !strings.Contains(w.Body.String(), `"status":422`) || !strings.Contains(w.Body.String(), "urn:problem:validation-failed") {
-		t.Fatalf("%d %s", w.Code, w.Body)
-	}
-}
-
 func slugsIn(t *testing.T, path string, pattern *regexp.Regexp) []string {
 	t.Helper()
 	data, err := os.ReadFile(path)

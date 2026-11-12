@@ -39,7 +39,7 @@ func TestErrorHandlerMapsConstraintViolations(t *testing.T) {
 	}{
 		"23505": {409, "conflict"},
 		"23503": {409, "conflict"},
-		"23514": {422, "validation-failed"},
+		"23514": {400, "validation-failed"},
 		"42P01": {500, "internal-error"},
 	} {
 		w := httptest.NewRecorder()

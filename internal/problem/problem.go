@@ -59,14 +59,11 @@ type FieldError struct {
 
 // Error is a failure the API reports to the client.
 type Error struct {
-	Slug   Slug
-	Detail string
-	Errors []FieldError
-	// HTTPStatus overrides the slug's usual status when it's set, such as 422 for a validation-failed
-	// problem that only the database caught.
-	HTTPStatus int
-	Headers    map[string]string
-	Cause      error
+	Slug    Slug
+	Detail  string
+	Errors  []FieldError
+	Headers map[string]string
+	Cause   error
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("%s: %s", e.Slug, e.Detail) }
@@ -95,9 +92,6 @@ func lookup(slug Slug) (Slug, int, string) {
 // Status returns the HTTP status for the problem, or 500 for a slug that isn't in the catalog.
 func (e *Error) Status() int {
 	_, status, _ := lookup(e.Slug)
-	if e.HTTPStatus != 0 && Known(e.Slug) {
-		return e.HTTPStatus
-	}
 	return status
 }
 
@@ -112,8 +106,7 @@ type body struct {
 
 // Write sends the problem as application/problem+json. A slug that isn't in the catalog is sent as internal-error.
 func Write(w http.ResponseWriter, r *http.Request, e *Error) {
-	slug, _, title := lookup(e.Slug)
-	status := e.Status()
+	slug, status, title := lookup(e.Slug)
 	for name, value := range e.Headers {
 		w.Header().Set(name, value)
 	}

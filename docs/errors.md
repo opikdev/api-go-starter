@@ -17,7 +17,7 @@ Every error is `application/problem+json` per [RFC 9457](https://www.rfc-editor.
 
 | Type | Status | Meaning |
 |---|---|---|
-| `urn:problem:validation-failed` | 400 | A field is invalid, the JSON is malformed, or `limit` is over 100. 422 when only a database check constraint caught it |
+| `urn:problem:validation-failed` | 400 | A field is invalid, the JSON is malformed, `limit` is over 100, or a value breaks a database check constraint. An error about the whole body has `field: ""` |
 | `urn:problem:invalid-credentials` | 401 | Wrong email or password |
 | `urn:problem:unauthorized` | 401 | The token or session cookie is missing, invalid, expired, or revoked |
 | `urn:problem:forbidden` | 403 | A browser sent a request that changes data from an origin that isn't the API's and isn't in `CORS_ORIGINS` |

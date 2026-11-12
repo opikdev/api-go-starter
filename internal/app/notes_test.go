@@ -258,7 +258,7 @@ func TestUpdatingNotes(t *testing.T) {
 			patch         apiclient.UpdateNote
 			field, detail string
 		}{
-			{apiclient.UpdateNote{}, "body", "needs title, body, or both"},
+			{apiclient.UpdateNote{}, "", "needs title, body, or both"},
 			{apiclient.UpdateNote{Title: ptr("  ")}, "title", "must not be blank"},
 			{apiclient.UpdateNote{Title: ptr("a\x00b")}, "title", "must not contain NUL characters"},
 			{apiclient.UpdateNote{Body: ptr("a\x00b")}, "body", "must not contain NUL characters"},

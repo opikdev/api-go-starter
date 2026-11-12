@@ -239,11 +239,7 @@ func constraintProblem(err error) *problem.Error {
 	case pgUniqueViolation, pgForeignKeyViolation:
 		return problem.New(problem.Conflict, "The change conflicts with the current data, such as a record another request just created or deleted. Fetch the current state, then retry.")
 	case pgCheckViolation:
-		return &problem.Error{
-			Slug:       problem.ValidationFailed,
-			Detail:     "A value breaks a data rule. Check the fields against the API docs, then retry.",
-			HTTPStatus: http.StatusUnprocessableEntity,
-		}
+		return problem.New(problem.ValidationFailed, "A value breaks a data rule. Check the fields against the API docs, then retry.")
 	}
 	return nil
 }

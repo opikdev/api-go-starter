@@ -66,8 +66,9 @@ func rateLimitClient(address string) string {
 	return netip.PrefixFrom(ip, 64).Masked().String()
 }
 
-func secondsUntil(t time.Time) int {
-	return max(1, int(math.Ceil(time.Until(t).Seconds())))
+// secondsUntil is capped at the window, so clock skew between the API and Postgres never reports more.
+func secondsUntil(t time.Time, windowSeconds int32) int {
+	return min(int(windowSeconds), max(1, int(math.Ceil(time.Until(t).Seconds()))))
 }
 
 func (l rateLimiter) hit(ctx context.Context, key string, policy rateLimitPolicy) (store.HitRateLimitRow, error) {
@@ -87,7 +88,7 @@ func (l rateLimiter) check(w http.ResponseWriter, r *http.Request, policy rateLi
 	}
 	headers := rateLimitHeadersFrom(r.Context())
 	headers.policies = append(headers.policies, policy.item())
-	resetIn := secondsUntil(hit.ResetAt)
+	resetIn := secondsUntil(hit.ResetAt, policy.windowSeconds)
 	state := fmt.Sprintf("%q;r=%d;t=%d", policy.name, max(0, policy.quota-int(hit.Count)), resetIn)
 	if int(hit.Count) > policy.quota {
 		return rateLimited(headers.policies, policy, resetIn,
@@ -132,7 +133,7 @@ func (l rateLimiter) startLogin(ctx context.Context, email string) (func(context
 		return nil, err
 	}
 	if int(hit.Count) > l.login.quota {
-		resetIn := secondsUntil(hit.ResetAt)
+		resetIn := secondsUntil(hit.ResetAt, l.login.windowSeconds)
 		policies := append(slices.Clone(rateLimitHeadersFrom(ctx).policies), l.login.item())
 		return nil, rateLimited(policies, l.login, resetIn,
 			fmt.Sprintf("Too many failed logins for this account. Retry in %d seconds.", resetIn))
