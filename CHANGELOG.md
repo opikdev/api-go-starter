@@ -18,6 +18,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 - Log lines written during a traced request or the cleanup job have `trace_id` and `span_id`. The cleanup job is traced.
 - `api/openapi.yaml` documents every status the middleware can return, with shared responses for 413 and 500, and shared headers: `X-Request-Id` on every response, and `Cache-Control`, `RateLimit`, and `RateLimit-Policy` on every `/v1` response. A test fails when an operation misses one.
 - `pik new` renames the README title and the spec's `info.title`, which also titles `/docs`, resets `info.version` to `0.1.0` and `CHANGELOG.md` to an empty `[Unreleased]` section, and regenerates the server so it embeds the renamed spec.
+- Compose builds the image once, in `migrate`, and `seed` and `api` reuse it. All three run with a read-only root filesystem.
 
 ### Changed
 
@@ -40,6 +41,10 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Security
 
+- Base images are pinned by digest, and Renovate keeps the digests current. It waits 3 days before proposing a new release of any dependency.
+- The release workflow scans the image with Trivy before it pushes it, and publishes it with an SBOM, `mode=max` provenance, and a GitHub build provenance attestation. CI scans the image on every pull request too.
+- The SBOM job in `security.yml` only reads the repo.
+- Go 1.27.4, which fixes GO-2026-6859, and updated pgx, goose, `x/crypto`, and the oapi-codegen runtime.
 - Every `/v1` response sends `Cache-Control: no-store`, not just login.
 - Every response except `/docs` sends `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`.
 - `/docs` serves Swagger UI from files embedded in the binary, with no CDN, under `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`.

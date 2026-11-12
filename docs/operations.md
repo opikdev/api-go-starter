@@ -43,7 +43,7 @@ Replace the dev passwords in `docker/postgres/init.sql`. Run the file once as th
 
 ## Deploy
 
-Before you tag a release, set `info.version` in `api/openapi.yaml` to the new version and run `make generate`, so `/openapi.json` reports it. Pushing a `vX.Y.Z` tag runs every CI check, then publishes an image for amd64 and arm64 to `ghcr.io` if they pass. The binary runs every step, so deploy in this order:
+Before you tag a release, set `info.version` in `api/openapi.yaml` to the new version and run `make generate`, so `/openapi.json` reports it. Pushing a `vX.Y.Z` tag runs every CI check, including the end-to-end and migration checks. If they pass, it builds the image, fails on any fixable HIGH or CRITICAL vulnerability that Trivy finds, then publishes it for amd64 and arm64 to `ghcr.io`, with an SBOM and a signed build provenance attestation. Check it with `gh attestation verify oci://ghcr.io/<OWNER>/<REPO>:<VERSION> --owner <OWNER>`. The binary runs every step, so deploy in this order:
 
 1. Run `/api migrate` with `MIGRATION_DATABASE_URL` set to the owner role, as one job per deploy, before the new version takes traffic. It holds a Postgres advisory lock for the whole run, so a second run waits, then finds nothing to do. Running it from every replica is safe too.
 2. Roll out the new image with `DATABASE_URL` set to `api_app`.
