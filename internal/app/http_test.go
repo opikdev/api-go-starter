@@ -249,6 +249,10 @@ func TestOpenAPI(t *testing.T) {
 		t.Fatal("the served spec doesn't match api/openapi.yaml. Run go generate ./...")
 	}
 
+	if served["info"].(map[string]any)["title"] != spec.Info.Title || served["info"].(map[string]any)["version"] != spec.Info.Version {
+		t.Fatalf("served info = %v", served["info"])
+	}
+
 	for path, item := range spec.Paths.Map() {
 		for method, op := range item.Operations() {
 			if op.OperationID == "" || op.Summary == "" {
@@ -256,9 +260,6 @@ func TestOpenAPI(t *testing.T) {
 			}
 			if !strings.HasPrefix(path, "/v1") {
 				continue
-			}
-			if op.Responses.Value("429") == nil {
-				t.Errorf("%s %s doesn't document 429", method, path)
 			}
 			if method != "GET" && op.Responses.Value("403") == nil {
 				t.Errorf("%s %s changes data, so it must document 403 for blocked cross-origin requests", method, path)
@@ -278,6 +279,49 @@ func TestOpenAPI(t *testing.T) {
 		}
 	}
 
+}
+
+// TestSpecDocumentsMiddlewareResponses checks that every status and header the middleware can send, before a
+// handler runs, is in the spec, so a client generated from it can handle them.
+func TestSpecDocumentsMiddlewareResponses(t *testing.T) {
+	spec, err := openapi3.NewLoader().LoadFromFile("../../api/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, item := range spec.Paths.Map() {
+		v1 := strings.HasPrefix(path, "/v1/")
+		for method, op := range item.Operations() {
+			var want []string
+			if v1 {
+				want = append(want, "429")
+			}
+			if v1 && method != "GET" {
+				want = append(want, "403")
+			}
+			if op.RequestBody != nil {
+				want = append(want, "400", "413", "415")
+			}
+			for _, status := range append(want, "500") {
+				if op.Responses.Value(status) == nil {
+					t.Errorf("%s %s doesn't document %s", method, path, status)
+				}
+			}
+			headers := []string{"X-Request-Id"}
+			if v1 {
+				headers = append(headers, "Cache-Control", "RateLimit", "RateLimit-Policy")
+			}
+			for status, response := range op.Responses.Map() {
+				for _, header := range headers {
+					if response.Value.Headers[header] == nil {
+						t.Errorf("%s %s %s doesn't document %s", method, path, status, header)
+					}
+				}
+			}
+			if limited := op.Responses.Value("429"); limited != nil && limited.Value.Headers["Retry-After"] == nil {
+				t.Errorf("%s %s 429 doesn't document Retry-After", method, path)
+			}
+		}
+	}
 }
 
 func TestDocs(t *testing.T) {

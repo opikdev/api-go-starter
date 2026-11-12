@@ -74,10 +74,7 @@ func (h *handlers) CreateSession(ctx context.Context, request api.CreateSessionR
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	response := api.CreateSession201JSONResponse{
-		Body:    api.Session{ExpiresAt: expiresAt.UTC()},
-		Headers: api.CreateSession201ResponseHeaders{CacheControl: ptr("no-store")},
-	}
+	response := api.CreateSession201JSONResponse{Body: api.Session{ExpiresAt: expiresAt.UTC()}}
 	if request.Body.Delivery != nil && *request.Body.Delivery == api.Cookie {
 		response.Headers.SetCookie = ptr(sessionCookie(token, int(h.sessionTTLHours)*3600).String())
 	} else {

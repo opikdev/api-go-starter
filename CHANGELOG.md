@@ -16,8 +16,12 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 - `docs/customize.md` shows how to load related data for a page without a query per row.
 - OpenTelemetry metrics over OTLP/HTTP whenever traces are exported, with the same `OTEL_*` settings: HTTP server metrics, database call durations, and pool metrics. Shutdown flushes them.
 - Log lines written during a traced request or the cleanup job have `trace_id` and `span_id`. The cleanup job is traced.
+- `api/openapi.yaml` documents every status the middleware can return, with shared responses for 413 and 500, and shared headers: `X-Request-Id` on every response, and `Cache-Control`, `RateLimit`, and `RateLimit-Policy` on every `/v1` response. A test fails when an operation misses one.
+- `pik new` renames the README title and the spec's `info.title`, which also titles `/docs`, resets `info.version` to `0.1.0` and `CHANGELOG.md` to an empty `[Unreleased]` section, and regenerates the server so it embeds the renamed spec.
 
 ### Changed
+
+- `info.title` in the spec is the project name, `api-go-starter`, and `info.version` is the project version, `0.3.0`, instead of `1.0.0`.
 
 - **Breaking:** rate limit headers follow draft-ietf-httpapi-ratelimit-headers. Every `/v1` response sends `RateLimit-Policy`, such as `"global";q=300;w=60`, and `RateLimit`, such as `"global";r=238;t=25`, listing the auth policy too on registration and login. On a 429, `RateLimit` and `Retry-After` describe only the policy that ran out. `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` are gone.
 

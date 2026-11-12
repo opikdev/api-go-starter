@@ -148,7 +148,7 @@ func (h *handlers) ListNotes(ctx context.Context, request api.ListNotesRequestOb
 		}
 		page.Data = append(page.Data, presentNote(row))
 	}
-	return api.ListNotes200JSONResponse(page), nil
+	return api.ListNotes200JSONResponse{Body: page}, nil
 }
 
 func (h *handlers) GetNote(ctx context.Context, request api.GetNoteRequestObject) (api.GetNoteResponseObject, error) {
