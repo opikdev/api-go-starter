@@ -40,7 +40,22 @@ func invalidRequest(err error) *problem.Error {
 	}
 }
 
+// fromValidation maps a validator error to a problem. Body read errors come first, because kin-openapi reads
+// the body while checking security and wraps the failure in a SecurityRequirementsError.
 func fromValidation(err error) error {
+	var maxBytes *http.MaxBytesError
+	if errors.As(err, &maxBytes) {
+		return problem.New(problem.PayloadTooLarge, fmt.Sprintf("The request body is over the %d-byte limit.", maxBodyBytes))
+	}
+	var requestErr *openapi3filter.RequestError
+	if errors.As(err, &requestErr) && requestErr.Reason == "reading failed" {
+		return &problem.Error{
+			Slug:   problem.ValidationFailed,
+			Detail: invalidFieldsDetail,
+			Errors: []problem.FieldError{{Field: "body", Detail: "couldn't be read"}},
+			Cause:  err,
+		}
+	}
 	var securityErr *openapi3filter.SecurityRequirementsError
 	if errors.As(err, &securityErr) {
 		headers := map[string]string{"WWW-Authenticate": "Bearer"}
@@ -63,10 +78,6 @@ func fromValidation(err error) error {
 	}
 	if errors.Is(err, routers.ErrMethodNotAllowed) {
 		return problem.New(problem.MethodNotAllowed, "This path doesn't support that method.")
-	}
-	var maxBytes *http.MaxBytesError
-	if errors.As(err, &maxBytes) {
-		return problem.New(problem.PayloadTooLarge, fmt.Sprintf("The request body is over the %d-byte limit.", maxBodyBytes))
 	}
 	if isUnsupportedMediaType(err) {
 		return problem.New(problem.UnsupportedMediaType, "Send the body as JSON, with the header Content-Type: application/json.")

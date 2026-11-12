@@ -3,7 +3,9 @@ package app_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
@@ -40,6 +42,32 @@ func TestErrorResponses(t *testing.T) {
 	t.Run("rejects an oversized body", func(t *testing.T) {
 		res := s.raw(t, "POST", "/v1/users", strings.Repeat("x", 100*1024+1), nil)
 		expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 413, "payload-too-large")
+	})
+
+	t.Run("rejects an oversized chunked body with 413 on a protected route", func(t *testing.T) {
+		token := s.signUp(t).token
+		for _, path := range []string{"/v1/notes", "/v1/users"} {
+			body := io.MultiReader(strings.NewReader(`{"title":"`), strings.NewReader(strings.Repeat("x", 200*1024)), strings.NewReader(`"}`))
+			request, err := http.NewRequest("POST", s.URL+path, body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Authorization", "Bearer "+token)
+			response, err := http.DefaultClient.Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, _ := io.ReadAll(response.Body)
+			_ = response.Body.Close()
+			if request.ContentLength != 0 {
+				t.Fatalf("the request has a Content-Length of %d, so it isn't chunked", request.ContentLength)
+			}
+			expectProblem(t, response.StatusCode, response.Header.Get("Content-Type"), data, 413, "payload-too-large")
+		}
+		if strings.Contains(s.logs.String(), `"level":"ERROR"`) {
+			t.Fatalf("a client mistake was logged as an error: %s", s.logs.String())
+		}
 	})
 
 	for label, contentType := range map[string]string{"text/plain": "text/plain", "a form, as curl -d sends by default": "application/x-www-form-urlencoded"} {
