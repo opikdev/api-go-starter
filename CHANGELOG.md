@@ -27,6 +27,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 - **Breaking:** `/docs` and `/openapi.json` return 404 unless `DOCS_ENABLED=true`. Compose, the dev container, and `.env.example` turn it on. See [ADR 008](docs/decisions/008-turn-off-api-docs-by-default.md).
 
+- `make check-generated`, and so `make verify`, compares generated code before and after `make generate`, instead of against the Git index, so it no longer fails until you `git add` freshly generated files. When code was stale, it names the regenerated files.
 - `/healthz` and `/readyz` are logged at `debug` instead of `info`, and aren't traced.
 
 ### Fixed
