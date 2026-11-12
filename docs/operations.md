@@ -17,6 +17,8 @@ Set these on the API process. `.env.example` lists every option, with values for
 | `SESSION_TTL_HOURS` | number, 1 to 9600 | `168` | Session lifetime. At most 400 days, because browsers cap a cookie's `Max-Age` there |
 | `RATE_LIMIT_PER_MINUTE` | number | `300` | Per client, across `/v1` |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | number | `10` | Per client, on registration and login |
+| `LOGIN_FAILURE_LIMIT` | number | `5` | Failed logins per account before login returns 429, from any address |
+| `LOGIN_FAILURE_WINDOW_SECONDS` | number, 1 to 86400 | `900` | Window for `LOGIN_FAILURE_LIMIT` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | URL | Empty | Turns on trace and error export. The exporter also reads the other standard `OTEL_EXPORTER_OTLP_*` variables |
 | `OTEL_SERVICE_NAME` | string | `api-go-starter` | Service name on exported traces |
 | `SEED_DEMO_DATA` | boolean | `false` | Set to `true` to let `seed` add the fake demo user. Compose and `.env.example` set it for local development |
@@ -29,6 +31,8 @@ Set `TRUST_PROXY_HOPS` to the number of proxies you run in front of the API, or 
 - `N` takes the Nth address from the right of `X-Forwarded-For`, after joining every header value with commas. With fewer addresses than `N`, it takes the leftmost. If that entry is empty or not an IP address, it uses the TCP peer address.
 
 Set it no higher than your real proxy count, because clients can put any addresses they like at the left of the header. `TRUST_PROXY` was removed, and the API refuses to start while it's set. `TRUST_PROXY=true` is `TRUST_PROXY_HOPS=1`.
+
+Rate limits count an IPv4 client by its address and an IPv6 client by its /64, so rotating addresses inside one network doesn't reset a limit. Each `/v1` response lists the limits that apply in `RateLimit-Policy`, such as `"global";q=300;w=60`, and what's left of each in `RateLimit`, such as `"global";r=238;t=25`. See [ADR 007](decisions/007-key-rate-limits-by-network-and-account.md).
 
 ## Set up production roles
 

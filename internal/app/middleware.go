@@ -7,13 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net"
 	"net/http"
 	"net/netip"
 	"runtime/debug"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +20,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/opikdev/api-go-starter/internal/problem"
-	"github.com/opikdev/api-go-starter/internal/store"
 )
 
 const maxBodyBytes = 100 * 1024
@@ -127,7 +124,7 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 }
 
 // exposedHeaders lists every response header a browser client may read beyond the CORS-safelisted ones.
-const exposedHeaders = "ETag, Location, X-Request-Id, Retry-After, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Idempotency-Replayed, WWW-Authenticate"
+const exposedHeaders = "ETag, Location, X-Request-Id, Retry-After, RateLimit, RateLimit-Policy, Idempotency-Replayed, WWW-Authenticate"
 
 func withCORS(origins []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -184,11 +181,6 @@ func withSpanName(next http.Handler) http.Handler {
 	})
 }
 
-type rateLimiter struct {
-	queries        *store.Queries
-	trustProxyHops int
-}
-
 // clientIP takes the address the trusted proxy nearest the client saw: the hops-th
 // X-Forwarded-For entry from the right. With no trusted proxies, or an unusable entry, it uses RemoteAddr.
 func clientIP(r *http.Request, hops int) string {
@@ -210,30 +202,4 @@ func clientIP(r *http.Request, hops int) string {
 		return r.RemoteAddr
 	}
 	return host
-}
-
-// check counts the request and returns a problem once the client is over the limit.
-func (l rateLimiter) check(r *http.Request, w http.ResponseWriter, name string, limit int) error {
-	hit, err := l.queries.HitRateLimit(r.Context(), name+":"+clientIP(r, l.trustProxyHops))
-	if err != nil {
-		return fmt.Errorf("count %s rate limit hit: %w", name, err)
-	}
-	resetIn := max(1, int(math.Ceil(time.Until(hit.ResetAt).Seconds())))
-	headers := map[string]string{
-		"RateLimit-Limit":     strconv.Itoa(limit),
-		"RateLimit-Remaining": strconv.Itoa(max(0, limit-int(hit.Count))),
-		"RateLimit-Reset":     strconv.Itoa(resetIn),
-	}
-	if int(hit.Count) > limit {
-		headers["Retry-After"] = strconv.Itoa(resetIn)
-		return &problem.Error{
-			Slug:    problem.RateLimited,
-			Detail:  fmt.Sprintf("You've reached the limit of %d requests per minute. Retry in %d seconds.", limit, resetIn),
-			Headers: headers,
-		}
-	}
-	for header, value := range headers {
-		w.Header().Set(header, value)
-	}
-	return nil
 }

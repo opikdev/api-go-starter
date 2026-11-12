@@ -33,6 +33,17 @@ func clearedSessionCookie() *http.Cookie { return sessionCookie("", -1) }
 
 func (h *handlers) CreateSession(ctx context.Context, request api.CreateSessionRequestObject) (api.CreateSessionResponseObject, error) {
 	email := strings.ToLower(string(request.Body.Email))
+	succeeded, err := h.limiter.startLogin(ctx, email)
+	var limited *problem.Error
+	if errors.As(err, &limited) {
+		if _, verifyErr := auth.VerifyPassword(request.Body.Password, h.dummyHash); verifyErr != nil {
+			return nil, fmt.Errorf("verify the timing-equalizer password: %w", verifyErr)
+		}
+		return nil, err
+	}
+	if err != nil {
+		return nil, err
+	}
 	user, err := h.queries.FindUserByEmail(ctx, email)
 	found := err == nil
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -48,6 +59,9 @@ func (h *handlers) CreateSession(ctx context.Context, request api.CreateSessionR
 	}
 	if !found || !matches {
 		return nil, problem.New(problem.InvalidCredentials, "The email or password is wrong.")
+	}
+	if err := succeeded(ctx); err != nil {
+		return nil, err
 	}
 
 	token, hash, err := auth.NewToken()

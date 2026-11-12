@@ -56,12 +56,18 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 		return nil, fmt.Errorf("encode OpenAPI spec: %w", err)
 	}
 
-	h, err := newHandlers(pool, cfg.SessionTTLHours)
+	queries := store.New(pool)
+	limiter := rateLimiter{
+		queries:        queries,
+		trustProxyHops: cfg.TrustProxyHops,
+		global:         rateLimitPolicy{name: "global", quota: cfg.RateLimitPerMinute, windowSeconds: 60},
+		auth:           rateLimitPolicy{name: "auth", quota: cfg.AuthRateLimitPerMinute, windowSeconds: 60},
+		login:          rateLimitPolicy{name: "login", quota: cfg.LoginFailureLimit, windowSeconds: cfg.LoginFailureWindowSeconds},
+	}
+	h, err := newHandlers(pool, cfg.SessionTTLHours, limiter)
 	if err != nil {
 		return nil, err
 	}
-	queries := store.New(pool)
-	limiter := rateLimiter{queries: queries, trustProxyHops: cfg.TrustProxyHops}
 	errorHandler := newErrorHandler(logger)
 
 	authLimit := func(next api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
@@ -69,7 +75,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 			return next
 		}
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
-			if err := limiter.check(r, w, "auth", cfg.AuthRateLimitPerMinute); err != nil {
+			if err := limiter.check(w, r, limiter.auth); err != nil {
 				return nil, err
 			}
 			return next(ctx, w, r, request)
@@ -113,7 +119,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 
 	apiHandler := validator(routes)
 	limited := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := limiter.check(r, w, "global", cfg.RateLimitPerMinute); err != nil {
+		if err := limiter.check(w, r, limiter.global); err != nil {
 			errorHandler(w, r, err)
 			return
 		}
@@ -125,7 +131,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 			apiHandler.ServeHTTP(w, r)
 			return
 		}
-		protected.ServeHTTP(w, r)
+		protected.ServeHTTP(w, r.WithContext(withRateLimitHeaders(r.Context())))
 	})
 
 	top := http.NewServeMux()

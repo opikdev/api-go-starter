@@ -4,6 +4,18 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Added
+
+- Failed logins are limited per account, from any address: after `LOGIN_FAILURE_LIMIT` (default 5) failures in `LOGIN_FAILURE_WINDOW_SECONDS` (default 900), `POST /v1/sessions` returns 429 `rate-limited` without checking the password, whether or not the account exists. A successful login doesn't count. See [ADR 007](docs/decisions/007-key-rate-limits-by-network-and-account.md).
+
+### Changed
+
+- **Breaking:** rate limit headers follow draft-ietf-httpapi-ratelimit-headers. Every `/v1` response sends `RateLimit-Policy`, such as `"global";q=300;w=60`, and `RateLimit`, such as `"global";r=238;t=25`, listing the auth policy too on registration and login. On a 429, `RateLimit` and `Retry-After` describe only the policy that ran out. `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` are gone.
+
+### Security
+
+- Rate limits count an IPv6 client by its /64, and an IPv4-mapped IPv6 address as its IPv4 address, so rotating addresses inside one network no longer resets a limit.
+
 ## [0.3.0] - 2026-11-11
 
 ### Added

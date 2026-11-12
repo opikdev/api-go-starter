@@ -16,7 +16,8 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Port != 3000 || cfg.TrustProxyHops != 0 || len(cfg.CORSOrigins) != 0 || cfg.AuthRateLimitPerMinute != 10 || cfg.SessionTTLHours != 168 {
+	if cfg.Port != 3000 || cfg.TrustProxyHops != 0 || len(cfg.CORSOrigins) != 0 || cfg.AuthRateLimitPerMinute != 10 || cfg.SessionTTLHours != 168 ||
+		cfg.LoginFailureLimit != 5 || cfg.LoginFailureWindowSeconds != 900 {
 		t.Fatalf("cfg = %+v", cfg)
 	}
 }

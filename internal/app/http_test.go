@@ -122,7 +122,7 @@ func TestHeadersAndCORS(t *testing.T) {
 	t.Run("exposes the headers a browser client reads", func(t *testing.T) {
 		res := withCORS.raw(t, "GET", "/v1/notes", "", map[string]string{"Origin": "https://app.example"})
 		exposed := strings.Split(res.headers.Get("Access-Control-Expose-Headers"), ", ")
-		for _, header := range []string{"ETag", "Location", "X-Request-Id", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Idempotency-Replayed", "WWW-Authenticate"} {
+		for _, header := range []string{"ETag", "Location", "X-Request-Id", "Retry-After", "RateLimit", "RateLimit-Policy", "Idempotency-Replayed", "WWW-Authenticate"} {
 			if !slices.Contains(exposed, header) {
 				t.Errorf("%s isn't exposed: %v", header, exposed)
 			}
