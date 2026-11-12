@@ -63,7 +63,7 @@ func TestRegistration(t *testing.T) {
 		"a very long email": {`{"email":"` + strings.Repeat("a", 250) + `@example.com","password":"` + testPassword + `"}`, "email", "must be at most 254 characters"},
 		"an unknown field":  {`{"email":"a@example.com","password":"` + testPassword + `","isAdmin":true}`, "isAdmin", "isn't a known field"},
 		"a wrong type":      {`{"email":5,"password":"` + testPassword + `"}`, "email", "must be string"},
-		"malformed JSON":    {`{"email":`, "body", "isn't valid JSON"},
+		"malformed JSON":    {`{"email":`, "", "isn't valid JSON"},
 	} {
 		t.Run("rejects "+label, func(t *testing.T) {
 			res := s.raw(t, "POST", "/v1/users", c.body, nil)
@@ -127,7 +127,17 @@ func TestAuthentication(t *testing.T) {
 		}
 	})
 
-	for label, header := range map[string]string{"no token": "", "a wrong token": "Bearer not-a-token", "the wrong scheme": "Basic abc"} {
+	t.Run("matches the Bearer scheme case-insensitively", func(t *testing.T) {
+		user := s.signUp(t)
+		for _, scheme := range []string{"bearer", "BEARER"} {
+			res := s.raw(t, "GET", "/v1/users/me", "", map[string]string{"Authorization": scheme + " " + user.token})
+			if res.status != 200 {
+				t.Fatalf("%s: %d %s", scheme, res.status, res.body)
+			}
+		}
+	})
+
+	for label, header := range map[string]string{"no token": "", "a wrong token": "Bearer not-a-token", "the wrong scheme": "Basic abc", "a scheme with no token": "Bearer"} {
 		t.Run("rejects "+label, func(t *testing.T) {
 			headers := map[string]string{}
 			if header != "" {

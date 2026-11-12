@@ -4,6 +4,49 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Added
+
+- Failed logins are limited per account, from any address: after `LOGIN_FAILURE_LIMIT` (default 5) failures in `LOGIN_FAILURE_WINDOW_SECONDS` (default 900), `POST /v1/sessions` returns 429 `rate-limited` without checking the password, whether or not the account exists. A successful login doesn't count. See [ADR 007](docs/decisions/007-key-rate-limits-by-network-and-account.md).
+- Graceful drain on `SIGTERM` or `SIGINT`: `/readyz` returns 503 for `SHUTDOWN_DRAIN_SECONDS` (default 5) while requests are still served. Then in-flight requests get `SHUTDOWN_TIMEOUT_SECONDS` (default 30, up from a fixed 10, and never below the write timeout) before the cleanup job, pool, and telemetry close. Compose sets `stop_grace_period: 40s`.
+- OpenTelemetry metrics over OTLP/HTTP whenever traces are exported, with the same `OTEL_*` settings: HTTP server metrics, database call durations, and pool metrics. Shutdown flushes them.
+- Log lines written during a traced request or the cleanup job have `trace_id` and `span_id`. The cleanup job is traced.
+- The `urn:problem:conflict` problem type, with status 409. A unique or foreign key violation that no handler expected returns it instead of a 500, and a check violation returns 400 `validation-failed`, with no constraint name or SQL in `detail`.
+- `api/openapi.yaml` documents every status the middleware can return, with shared responses for 413 and 500, and shared headers: `X-Request-Id` on every response, and `Cache-Control`, `RateLimit`, and `RateLimit-Policy` on every `/v1` response. A test fails when an operation misses one.
+- `pik new` renames the README title and the spec's `info.title`, which also titles `/docs`. It resets `info.version` to `0.1.0` and `CHANGELOG.md` to an empty `[Unreleased]` section, and regenerates the server so it embeds the renamed spec.
+- `docs/deploy.md`, a go-live checklist: TLS and proxies, Postgres TLS, roles and secrets, pool size, migrations, drain and grace periods, docs, telemetry, and backups.
+- `docs/customize.md` shows how to load related data for a page without a query per row.
+
+### Changed
+
+- **Breaking:** rate limit headers follow draft-ietf-httpapi-ratelimit-headers. Every `/v1` response sends `RateLimit-Policy`, such as `"global";q=300;w=60`, and `RateLimit`, such as `"global";r=238;t=25`, listing the auth policy too on registration and login. On a 429, `RateLimit` and `Retry-After` describe only the policy that ran out. `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` are gone.
+- **Breaking:** `/docs` and `/openapi.json` return 404 unless `DOCS_ENABLED=true`. Compose, the dev container, and `.env.example` turn it on. See [ADR 008](docs/decisions/008-turn-off-api-docs-by-default.md).
+- **Breaking:** `docker/postgres/init.sql` no longer holds a password. It takes `api_app`'s password from the `api.app_password` setting, such as `PGOPTIONS="-c api.app_password=<PASSWORD>"`, fails without it, and sets the password again when the role exists, so you can create or rotate it without editing committed SQL. Compose passes the dev password.
+- **Breaking:** a validation error about the whole body, such as malformed JSON or `PATCH /v1/notes/{id}` with `{}`, has `field: ""` in `errors`, not `"body"`, which is also a note field.
+- `migrate` holds a Postgres advisory lock for the whole run, so concurrent runs, such as one per replica, wait in turn instead of failing. It also sets `lock_timeout` to 5 seconds for migration DDL.
+- `info.title` in the spec is the project name, `api-go-starter`, and `info.version` is the project version, `0.3.0`, instead of `1.0.0`.
+- Compose builds the image once, in `migrate`, and `seed` and `api` reuse it. All three run with a read-only root filesystem.
+- `/healthz` and `/readyz` are logged at `debug` instead of `info`, and aren't traced.
+
+### Fixed
+
+- An oversized chunked body on a protected route returns 413 `payload-too-large`, not a logged 500. Other body read errors return 400.
+- `PATCH /v1/notes/{id}` runs its update and the version lookup behind a mismatch in one transaction.
+- An idempotency key past its 24-hour expiry counts as unused, so it's claimed again instead of replaying an old response.
+- The idempotency fingerprint hashes the method, path, and the whole validated body as canonical JSON, so a field added later is covered. A replay of a request sent before this release gets 422 `idempotency-key-reused` instead.
+- The `Authorization` scheme matches `Bearer` in any case, as RFC 9110 requires.
+- `make check-generated`, and so `make verify`, compares generated code before and after `make generate`, instead of against the Git index, so it no longer fails until you `git add` freshly generated files. When code was stale, it names the regenerated files.
+
+### Security
+
+- Rate limits count an IPv6 client by its /64, and an IPv4-mapped IPv6 address as its IPv4 address, so rotating addresses inside one network no longer resets a limit.
+- Every `/v1` response sends `Cache-Control: no-store`, not just login.
+- Every response except `/docs` sends `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`.
+- `/docs` serves Swagger UI from files embedded in the binary, with no CDN, under `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`.
+- Go 1.27.4, which fixes GO-2026-6859, and updated pgx, goose, `x/crypto`, and the oapi-codegen runtime.
+- Base images are pinned by digest, and Renovate keeps the digests current. It waits 3 days before proposing a new release of any dependency.
+- The release workflow scans the image with Trivy before it pushes it, and publishes it with an SBOM, `mode=max` provenance, and a GitHub build provenance attestation. CI scans the image on every pull request too.
+- The SBOM job in `security.yml` only reads the repo.
+
 ## [0.3.0] - 2026-11-11
 
 ### Added

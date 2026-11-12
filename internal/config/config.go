@@ -15,20 +15,29 @@ const (
 	defaultServiceName = "api-go-starter"
 )
 
+// MaxRequestSeconds is the server's longest read or write timeout, so a shutdown timeout below it could cut
+// off a request that's still allowed to run.
+const MaxRequestSeconds = 30
+
 // Config holds every setting the serve command reads at startup.
 type Config struct {
-	Port                   int
-	LogLevel               string
-	DatabaseURL            string
-	StatementTimeoutMS     int
-	DatabasePoolMax        int32
-	CORSOrigins            []string
-	TrustProxyHops         int
-	SessionTTLHours        int32
-	RateLimitPerMinute     int
-	AuthRateLimitPerMinute int
-	TracingEnabled         bool
-	ServiceName            string
+	Port                      int
+	LogLevel                  string
+	DatabaseURL               string
+	StatementTimeoutMS        int
+	DatabasePoolMax           int32
+	CORSOrigins               []string
+	TrustProxyHops            int
+	SessionTTLHours           int32
+	RateLimitPerMinute        int
+	AuthRateLimitPerMinute    int
+	LoginFailureLimit         int
+	LoginFailureWindowSeconds int32
+	ShutdownDrainSeconds      int
+	ShutdownTimeoutSeconds    int
+	DocsEnabled               bool
+	TracingEnabled            bool
+	ServiceName               string
 }
 
 // Migrate holds the settings for the migrate command.
@@ -122,17 +131,22 @@ func newReader(env func(string) string) *reader {
 func Load(env func(string) string) (Config, error) {
 	r := newReader(env)
 	cfg := Config{
-		Port:                   r.integer("PORT", defaultPort, 1, 65535),
-		LogLevel:               r.str("LOG_LEVEL", "info"),
-		DatabaseURL:            r.str("DATABASE_URL", ""),
-		StatementTimeoutMS:     r.integer("DATABASE_STATEMENT_TIMEOUT_MS", 5000, 1, 600_000),
-		DatabasePoolMax:        r.int32("DATABASE_POOL_MAX", 0, 1, 10_000),
-		TrustProxyHops:         r.integer("TRUST_PROXY_HOPS", 0, 0, 100),
-		SessionTTLHours:        r.int32("SESSION_TTL_HOURS", 168, 1, 9600),
-		RateLimitPerMinute:     r.integer("RATE_LIMIT_PER_MINUTE", 300, 1, 1_000_000),
-		AuthRateLimitPerMinute: r.integer("AUTH_RATE_LIMIT_PER_MINUTE", 10, 1, 1_000_000),
-		TracingEnabled:         r.str("OTEL_EXPORTER_OTLP_ENDPOINT", "") != "",
-		ServiceName:            r.str("OTEL_SERVICE_NAME", defaultServiceName),
+		Port:                      r.integer("PORT", defaultPort, 1, 65535),
+		LogLevel:                  r.str("LOG_LEVEL", "info"),
+		DatabaseURL:               r.str("DATABASE_URL", ""),
+		StatementTimeoutMS:        r.integer("DATABASE_STATEMENT_TIMEOUT_MS", 5000, 1, 600_000),
+		DatabasePoolMax:           r.int32("DATABASE_POOL_MAX", 0, 1, 10_000),
+		TrustProxyHops:            r.integer("TRUST_PROXY_HOPS", 0, 0, 100),
+		SessionTTLHours:           r.int32("SESSION_TTL_HOURS", 168, 1, 9600),
+		RateLimitPerMinute:        r.integer("RATE_LIMIT_PER_MINUTE", 300, 1, 1_000_000),
+		AuthRateLimitPerMinute:    r.integer("AUTH_RATE_LIMIT_PER_MINUTE", 10, 1, 1_000_000),
+		LoginFailureLimit:         r.integer("LOGIN_FAILURE_LIMIT", 5, 1, 1_000_000),
+		LoginFailureWindowSeconds: r.int32("LOGIN_FAILURE_WINDOW_SECONDS", 900, 1, 86_400),
+		ShutdownDrainSeconds:      r.integer("SHUTDOWN_DRAIN_SECONDS", 5, 0, 300),
+		ShutdownTimeoutSeconds:    r.integer("SHUTDOWN_TIMEOUT_SECONDS", MaxRequestSeconds, MaxRequestSeconds, 3600),
+		DocsEnabled:               r.flag("DOCS_ENABLED"),
+		TracingEnabled:            r.str("OTEL_EXPORTER_OTLP_ENDPOINT", "") != "",
+		ServiceName:               r.str("OTEL_SERVICE_NAME", defaultServiceName),
 	}
 	for _, origin := range strings.Split(r.str("CORS_ORIGINS", ""), ",") {
 		if origin = strings.TrimSpace(origin); origin != "" {

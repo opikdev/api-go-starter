@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -38,7 +39,7 @@ func main() {
 	var err error
 	switch command {
 	case "serve":
-		err = serve(ctx)
+		err = serve(ctx, stop)
 	case "migrate":
 		err = migrate(ctx)
 	case "seed":
@@ -59,19 +60,19 @@ func main() {
 func newLogger(level string) *slog.Logger {
 	var lvl slog.Level
 	_ = lvl.UnmarshalText([]byte(level))
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl}))
+	return slog.New(telemetry.LogHandler(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl})))
 }
 
-func serve(ctx context.Context) error {
+func serve(ctx context.Context, stopSignals func()) error {
 	cfg, err := config.Load(nil)
 	if err != nil {
 		return err
 	}
 	logger := newLogger(cfg.LogLevel)
-	shutdownTracing := func(context.Context) error { return nil }
+	shutdownTelemetry := func(context.Context) error { return nil }
 	if cfg.TracingEnabled {
-		if shutdownTracing, err = telemetry.Start(ctx, cfg.ServiceName); err != nil {
-			return fmt.Errorf("start tracing: %w", err)
+		if shutdownTelemetry, err = telemetry.Start(ctx, cfg.ServiceName); err != nil {
+			return fmt.Errorf("start telemetry: %w", err)
 		}
 	}
 	pool, err := database.Open(ctx, cfg.DatabaseURL, cfg.StatementTimeoutMS, cfg.DatabasePoolMax)
@@ -88,26 +89,16 @@ func serve(ctx context.Context) error {
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		ReadTimeout:       config.MaxRequestSeconds * time.Second,
+		WriteTimeout:      config.MaxRequestSeconds * time.Second,
 		IdleTimeout:       60 * time.Second,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 
-	go func() {
-		ticker := time.NewTicker(cleanupInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := app.DeleteExpiredRows(ctx, pool); err != nil {
-					logger.Error("Cleanup failed", "err", err)
-				}
-			}
-		}
-	}()
+	jobsCtx, stopJobs := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopJobs()
+	var jobs sync.WaitGroup
+	jobs.Go(func() { app.RunCleanup(jobsCtx, pool, logger, cleanupInterval) })
 
 	errs := make(chan error, 1)
 	go func() {
@@ -119,14 +110,21 @@ func serve(ctx context.Context) error {
 		return err
 	case <-ctx.Done():
 	}
+	// A second signal now stops the process at once.
+	stopSignals()
 
-	logger.Info("Shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	handler.Drain()
+	logger.Info("Draining before shutdown", "seconds", cfg.ShutdownDrainSeconds)
+	time.Sleep(time.Duration(cfg.ShutdownDrainSeconds) * time.Second)
+
+	logger.Info("Shutting down", "timeoutSeconds", cfg.ShutdownTimeoutSeconds)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.ShutdownTimeoutSeconds)*time.Second)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return err
-	}
-	return shutdownTracing(shutdownCtx)
+	shutdownErr := server.Shutdown(shutdownCtx)
+	stopJobs()
+	jobs.Wait()
+	pool.Close()
+	return errors.Join(shutdownErr, shutdownTelemetry(shutdownCtx))
 }
 
 func migrate(ctx context.Context) error {

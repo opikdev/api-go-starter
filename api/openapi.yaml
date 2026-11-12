@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: API Go starter
-  version: 1.0.0
+  title: api-go-starter
+  version: 0.3.0
   description: A production-ready Go API. Every error is RFC 9457 Problem Details.
 components:
   securitySchemes:
@@ -71,7 +71,7 @@ components:
         createdAt:
           type: string
           format: date-time
-          example: "2026-11-07T15:20:30.000Z"
+          example: '2026-11-07T15:20:30.000Z'
       required:
         - id
         - email
@@ -127,7 +127,7 @@ components:
         expiresAt:
           type: string
           format: date-time
-          example: "2026-11-14T15:20:30.000Z"
+          example: '2026-11-14T15:20:30.000Z'
       required:
         - expiresAt
     Note:
@@ -148,11 +148,11 @@ components:
         createdAt:
           type: string
           format: date-time
-          example: "2026-11-07T15:20:30.000Z"
+          example: '2026-11-07T15:20:30.000Z'
         updatedAt:
           type: string
           format: date-time
-          example: "2026-11-07T15:20:30.000Z"
+          example: '2026-11-07T15:20:30.000Z'
       required:
         - id
         - title
@@ -171,7 +171,7 @@ components:
         body:
           type: string
           maxLength: 10000
-          default: ""
+          default: ''
           example: Ship the API.
       required:
         - title
@@ -192,7 +192,7 @@ components:
             nextCursor:
               type:
                 - string
-                - "null"
+                - 'null'
               example: null
           required:
             - limit
@@ -214,6 +214,39 @@ components:
           example: Ship the API.
       additionalProperties: false
   parameters: {}
+  headers:
+    X-Request-Id:
+      description: ID of this request. Quote it when you report a problem
+      schema:
+        type: string
+    RateLimit:
+      description: What is left of each policy in `RateLimit-Policy`, per draft-ietf-httpapi-ratelimit-headers, such as `"global";r=238;t=25`. On a 429, only the policy that ran out
+      schema:
+        type: string
+    RateLimit-Policy:
+      description: The rate limit policies that apply, such as `"global";q=300;w=60, "auth";q=10;w=60`. A 429 for too many failed logins adds `"login";q=5;w=900`
+      schema:
+        type: string
+    Retry-After:
+      description: Seconds to wait before retrying
+      schema:
+        type: integer
+    Cache-Control:
+      description: '`no-store`'
+      schema:
+        type: string
+    ETag:
+      description: Version of the note, for If-Match
+      schema:
+        type: string
+    Location:
+      description: URL of the new resource
+      schema:
+        type: string
+    Idempotency-Replayed:
+      description: '`true` when this response replays an earlier request'
+      schema:
+        type: string
   responses:
     ValidationFailed:
       description: Request validation failed
@@ -221,6 +254,15 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
     Unauthorized:
       description: Authentication required or invalid credentials
       content:
@@ -228,6 +270,14 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
       headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
         WWW-Authenticate:
           description: '`Bearer`'
           schema:
@@ -242,42 +292,120 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
     NotFound:
       description: Resource not found
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
     EmailTaken:
       description: Email already registered
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
     VersionMismatch:
       description: Resource version mismatch
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
+    PayloadTooLarge:
+      description: Payload too large
+      content: &id001
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
     UnsupportedMediaType:
       description: Unsupported media type
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
     IdempotencyKeyReused:
       description: Idempotency key reused
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
     PreconditionRequired:
       description: Precondition required
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
     RateLimited:
       description: Too many requests
       content:
@@ -285,10 +413,16 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
       headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
         Retry-After:
-          description: Seconds to wait before retrying
-          schema:
-            type: integer
+          $ref: '#/components/headers/Retry-After'
     ServiceUnavailable:
       description: Service unavailable
       content:
@@ -296,10 +430,22 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
       headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
         Retry-After:
-          description: Seconds to wait before retrying
-          schema:
-            type: integer
+          $ref: '#/components/headers/Retry-After'
+    InternalError:
+      description: Internal server error
+      content: *id001
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        RateLimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimit-Policy:
+          $ref: '#/components/headers/RateLimit-Policy'
+        Cache-Control:
+          $ref: '#/components/headers/Cache-Control'
 paths:
   /healthz:
     get:
@@ -308,12 +454,17 @@ paths:
       tags:
         - Health
       responses:
-        "200":
+        '200':
           description: The process is running
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthStatus'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /readyz:
     get:
       operationId: getReadiness
@@ -321,13 +472,18 @@ paths:
       tags:
         - Health
       responses:
-        "200":
+        '200':
           description: Ready for traffic
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthStatus'
-        "503":
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
           $ref: '#/components/responses/ServiceUnavailable'
   /v1/users:
     post:
@@ -342,22 +498,35 @@ paths:
             schema:
               $ref: '#/components/schemas/Credentials'
       responses:
-        "201":
+        '201':
           description: User created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
-        "400":
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimit-Policy'
+            Cache-Control:
+              $ref: '#/components/headers/Cache-Control'
+        '400':
           $ref: '#/components/responses/ValidationFailed'
-        "403":
+        '403':
           $ref: '#/components/responses/Forbidden'
-        "409":
+        '409':
           $ref: '#/components/responses/EmailTaken'
-        "415":
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
           $ref: '#/components/responses/UnsupportedMediaType'
-        "429":
+        '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/sessions:
     post:
       operationId: createSession
@@ -372,31 +541,39 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateSession'
       responses:
-        "201":
+        '201':
           description: Session created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Session'
           headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimit-Policy'
             Cache-Control:
-              description: '`no-store`'
-              schema:
-                type: string
+              $ref: '#/components/headers/Cache-Control'
             Set-Cookie:
               description: 'When `delivery` is `cookie`: `__Host-session=<token>; Path=/; Max-Age=<SESSION_TTL_HOURS in seconds>; HttpOnly; Secure; SameSite=Strict`'
               schema:
                 type: string
-        "400":
+        '400':
           $ref: '#/components/responses/ValidationFailed'
-        "401":
+        '401':
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        '403':
           $ref: '#/components/responses/Forbidden'
-        "415":
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
           $ref: '#/components/responses/UnsupportedMediaType'
-        "429":
+        '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/sessions/current:
     delete:
       operationId: deleteCurrentSession
@@ -407,19 +584,29 @@ paths:
         - bearerAuth: []
         - cookieAuth: []
       responses:
-        "204":
+        '204':
           description: Session revoked
           headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimit-Policy'
+            Cache-Control:
+              $ref: '#/components/headers/Cache-Control'
             Set-Cookie:
               description: 'Always clears the session cookie: `__Host-session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`'
               schema:
                 type: string
-        "401":
+        '401':
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        '403':
           $ref: '#/components/responses/Forbidden'
-        "429":
+        '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/users/me:
     get:
       operationId: getCurrentUser
@@ -430,16 +617,27 @@ paths:
         - bearerAuth: []
         - cookieAuth: []
       responses:
-        "200":
+        '200':
           description: Current user
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
-        "401":
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimit-Policy'
+            Cache-Control:
+              $ref: '#/components/headers/Cache-Control'
+        '401':
           $ref: '#/components/responses/Unauthorized'
-        "429":
+        '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/notes:
     post:
       operationId: createNote
@@ -466,37 +664,43 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateNote'
       responses:
-        "201":
+        '201':
           description: Note created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Note'
           headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimit-Policy'
+            Cache-Control:
+              $ref: '#/components/headers/Cache-Control'
             ETag:
-              description: Version of the note, for If-Match
-              schema:
-                type: string
+              $ref: '#/components/headers/ETag'
             Location:
-              description: URL of the new note
-              schema:
-                type: string
+              $ref: '#/components/headers/Location'
             Idempotency-Replayed:
-              description: '`true` when this response replays an earlier request'
-              schema:
-                type: string
-        "400":
+              $ref: '#/components/headers/Idempotency-Replayed'
+        '400':
           $ref: '#/components/responses/ValidationFailed'
-        "401":
+        '401':
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        '403':
           $ref: '#/components/responses/Forbidden'
-        "415":
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
           $ref: '#/components/responses/UnsupportedMediaType'
-        "422":
+        '422':
           $ref: '#/components/responses/IdempotencyKeyReused'
-        "429":
+        '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
     get:
       operationId: listNotes
       summary: List your notes, newest first
@@ -523,18 +727,29 @@ paths:
           name: cursor
           in: query
       responses:
-        "200":
+        '200':
           description: A page of notes
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/NoteList'
-        "400":
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimit-Policy'
+            Cache-Control:
+              $ref: '#/components/headers/Cache-Control'
+        '400':
           $ref: '#/components/responses/ValidationFailed'
-        "401":
+        '401':
           $ref: '#/components/responses/Unauthorized'
-        "429":
+        '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/notes/{id}:
     get:
       operationId: getNote
@@ -551,23 +766,31 @@ paths:
           name: id
           in: path
       responses:
-        "200":
+        '200':
           description: The note
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Note'
           headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimit-Policy'
+            Cache-Control:
+              $ref: '#/components/headers/Cache-Control'
             ETag:
-              description: Version of the note, for If-Match
-              schema:
-                type: string
-        "401":
+              $ref: '#/components/headers/ETag'
+        '401':
           $ref: '#/components/responses/Unauthorized'
-        "404":
+        '404':
           $ref: '#/components/responses/NotFound'
-        "429":
+        '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
     patch:
       operationId: updateNote
       summary: Update a note
@@ -597,33 +820,43 @@ paths:
             schema:
               $ref: '#/components/schemas/UpdateNote'
       responses:
-        "200":
+        '200':
           description: The updated note
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Note'
           headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimit-Policy'
+            Cache-Control:
+              $ref: '#/components/headers/Cache-Control'
             ETag:
-              description: Version of the note, for If-Match
-              schema:
-                type: string
-        "400":
+              $ref: '#/components/headers/ETag'
+        '400':
           $ref: '#/components/responses/ValidationFailed'
-        "401":
+        '401':
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        '403':
           $ref: '#/components/responses/Forbidden'
-        "404":
+        '404':
           $ref: '#/components/responses/NotFound'
-        "412":
+        '412':
           $ref: '#/components/responses/VersionMismatch'
-        "415":
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
           $ref: '#/components/responses/UnsupportedMediaType'
-        "428":
+        '428':
           $ref: '#/components/responses/PreconditionRequired'
-        "429":
+        '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
     delete:
       operationId: deleteNote
       summary: Delete a note
@@ -639,14 +872,25 @@ paths:
           name: id
           in: path
       responses:
-        "204":
+        '204':
           description: Note deleted
-        "401":
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimit-Policy:
+              $ref: '#/components/headers/RateLimit-Policy'
+            Cache-Control:
+              $ref: '#/components/headers/Cache-Control'
+        '401':
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        '403':
           $ref: '#/components/responses/Forbidden'
-        "404":
+        '404':
           $ref: '#/components/responses/NotFound'
-        "429":
+        '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
 webhooks: {}

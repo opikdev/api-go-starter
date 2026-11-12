@@ -35,12 +35,27 @@ func invalidRequest(err error) *problem.Error {
 	return &problem.Error{
 		Slug:   problem.ValidationFailed,
 		Detail: invalidFieldsDetail,
-		Errors: []problem.FieldError{{Field: "body", Detail: "isn't valid JSON for this operation"}},
+		Errors: []problem.FieldError{{Field: "", Detail: "isn't valid JSON for this operation"}},
 		Cause:  err,
 	}
 }
 
+// fromValidation maps a validator error to a problem. Body read errors come first, because kin-openapi reads
+// the body while checking security and wraps the failure in a SecurityRequirementsError.
 func fromValidation(err error) error {
+	var maxBytes *http.MaxBytesError
+	if errors.As(err, &maxBytes) {
+		return problem.New(problem.PayloadTooLarge, fmt.Sprintf("The request body is over the %d-byte limit.", maxBodyBytes))
+	}
+	var requestErr *openapi3filter.RequestError
+	if errors.As(err, &requestErr) && requestErr.Reason == "reading failed" {
+		return &problem.Error{
+			Slug:   problem.ValidationFailed,
+			Detail: invalidFieldsDetail,
+			Errors: []problem.FieldError{{Field: "", Detail: "couldn't be read"}},
+			Cause:  err,
+		}
+	}
 	var securityErr *openapi3filter.SecurityRequirementsError
 	if errors.As(err, &securityErr) {
 		headers := map[string]string{"WWW-Authenticate": "Bearer"}
@@ -63,10 +78,6 @@ func fromValidation(err error) error {
 	}
 	if errors.Is(err, routers.ErrMethodNotAllowed) {
 		return problem.New(problem.MethodNotAllowed, "This path doesn't support that method.")
-	}
-	var maxBytes *http.MaxBytesError
-	if errors.As(err, &maxBytes) {
-		return problem.New(problem.PayloadTooLarge, fmt.Sprintf("The request body is over the %d-byte limit.", maxBodyBytes))
 	}
 	if isUnsupportedMediaType(err) {
 		return problem.New(problem.UnsupportedMediaType, "Send the body as JSON, with the header Content-Type: application/json.")
@@ -112,7 +123,7 @@ func fieldErrors(err error) []problem.FieldError {
 		}
 		var parseErr *openapi3filter.ParseError
 		if requestErr.Parameter == nil && errors.As(requestErr.Err, &parseErr) {
-			out = append(out, problem.FieldError{Field: "body", Detail: "isn't valid JSON"})
+			out = append(out, problem.FieldError{Field: "", Detail: "isn't valid JSON"})
 			continue
 		}
 		found := false
@@ -157,7 +168,7 @@ func fieldName(parameter *openapi3.Parameter, location []string) string {
 		return parameter.Name
 	}
 	if len(location) == 0 {
-		return "body"
+		return ""
 	}
 	return strings.Join(location, ".")
 }

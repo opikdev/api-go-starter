@@ -8,7 +8,8 @@ A production-ready Go API: standard library `net/http`, a contract-first OpenAPI
 | [docs/customize.md](docs/customize.md) | How to add a feature, rename the project, or remove a module |
 | [docs/client.md](docs/client.md) | How to call the API from Go or other languages |
 | [docs/errors.md](docs/errors.md) | Every problem type the API can return |
-| [docs/operations.md](docs/operations.md) | Configuration, deploys, migrations, backups, and tracing |
+| [docs/deploy.md](docs/deploy.md) | Go-live checklist: TLS, roles and secrets, pool size, migrations, and shutdown |
+| [docs/operations.md](docs/operations.md) | Configuration, schema changes, backups, and telemetry |
 | [docs/decisions/](docs/decisions/) | Why it's built this way |
 | `.agents/skills/` | Step-by-step guides for recurring tasks |
 | `.mcp.json` | MCP servers for this project |
@@ -35,7 +36,7 @@ A production-ready Go API: standard library `net/http`, a contract-first OpenAPI
 - Return `*problem.Error` for failures the client can act on, and add new types to `internal/problem/problem.go`, the spec, and `docs/errors.md`. Wrap every other error with `fmt.Errorf("<op>: %w", err)`, so it's logged with context and the client gets a 500.
 - Scope every query on a resource to the caller's user ID. Return 404, not 403, for someone else's resource.
 - Keep imports pointing one way, as `internal/arch_test.go` enforces. `store` and `database` never import `net/http`.
-- Don't edit files listed in `.baseline.sha256`. They come from [opikdev/starters](https://github.com/opikdev/starters).
+- If `.baseline.sha256` exists, don't edit the files it lists. They come from [opikdev/starters](https://github.com/opikdev/starters).
 - Keep this file a short map, and put detail in `docs/`.
 - Fix any doc your change makes wrong, in the same change.
 - Record significant decisions with the `record-decision` skill.

@@ -152,8 +152,14 @@ type Forbidden = Problem
 // IdempotencyKeyReused defines model for IdempotencyKeyReused.
 type IdempotencyKeyReused = Problem
 
+// InternalError defines model for InternalError.
+type InternalError = Problem
+
 // NotFound defines model for NotFound.
 type NotFound = Problem
+
+// PayloadTooLarge defines model for PayloadTooLarge.
+type PayloadTooLarge = Problem
 
 // PreconditionRequired defines model for PreconditionRequired.
 type PreconditionRequired = Problem
@@ -662,18 +668,96 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	return m
 }
 
-type EmailTakenApplicationProblemPlusJSONResponse Problem
+type EmailTakenResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type EmailTakenApplicationProblemPlusJSONResponse struct {
+	Body Problem
 
-type ForbiddenApplicationProblemPlusJSONResponse Problem
+	Headers EmailTakenResponseHeaders
+}
 
-type IdempotencyKeyReusedApplicationProblemPlusJSONResponse Problem
+type ForbiddenResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type ForbiddenApplicationProblemPlusJSONResponse struct {
+	Body Problem
 
-type NotFoundApplicationProblemPlusJSONResponse Problem
+	Headers ForbiddenResponseHeaders
+}
 
-type PreconditionRequiredApplicationProblemPlusJSONResponse Problem
+type IdempotencyKeyReusedResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type IdempotencyKeyReusedApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers IdempotencyKeyReusedResponseHeaders
+}
+
+type InternalErrorResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type InternalErrorApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers InternalErrorResponseHeaders
+}
+
+type NotFoundResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type NotFoundApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers NotFoundResponseHeaders
+}
+
+type PayloadTooLargeResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type PayloadTooLargeApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers PayloadTooLargeResponseHeaders
+}
+
+type PreconditionRequiredResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type PreconditionRequiredApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers PreconditionRequiredResponseHeaders
+}
 
 type RateLimitedResponseHeaders struct {
-	RetryAfter *int
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	RetryAfter      *int
+	XRequestId      *string
 }
 type RateLimitedApplicationProblemPlusJSONResponse struct {
 	Body Problem
@@ -683,6 +767,7 @@ type RateLimitedApplicationProblemPlusJSONResponse struct {
 
 type ServiceUnavailableResponseHeaders struct {
 	RetryAfter *int
+	XRequestId *string
 }
 type ServiceUnavailableApplicationProblemPlusJSONResponse struct {
 	Body Problem
@@ -691,8 +776,12 @@ type ServiceUnavailableApplicationProblemPlusJSONResponse struct {
 }
 
 type UnauthorizedResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
 	SetCookie       *string
 	WWWAuthenticate *string
+	XRequestId      *string
 }
 type UnauthorizedApplicationProblemPlusJSONResponse struct {
 	Body Problem
@@ -700,11 +789,41 @@ type UnauthorizedApplicationProblemPlusJSONResponse struct {
 	Headers UnauthorizedResponseHeaders
 }
 
-type UnsupportedMediaTypeApplicationProblemPlusJSONResponse Problem
+type UnsupportedMediaTypeResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type UnsupportedMediaTypeApplicationProblemPlusJSONResponse struct {
+	Body Problem
 
-type ValidationFailedApplicationProblemPlusJSONResponse Problem
+	Headers UnsupportedMediaTypeResponseHeaders
+}
 
-type VersionMismatchApplicationProblemPlusJSONResponse Problem
+type ValidationFailedResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type ValidationFailedApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers ValidationFailedResponseHeaders
+}
+
+type VersionMismatchResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+type VersionMismatchApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers VersionMismatchResponseHeaders
+}
 
 type GetLivenessRequestObject struct {
 }
@@ -713,16 +832,54 @@ type GetLivenessResponseObject interface {
 	VisitGetLivenessResponse(w http.ResponseWriter) error
 }
 
-type GetLiveness200JSONResponse HealthStatus
+type GetLiveness200ResponseHeaders struct {
+	XRequestId *string
+}
+
+type GetLiveness200JSONResponse struct {
+	Body    HealthStatus
+	Headers GetLiveness200ResponseHeaders
+}
 
 func (response GetLiveness200JSONResponse) VisitGetLivenessResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLiveness500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetLiveness500ApplicationProblemPlusJSONResponse) VisitGetLivenessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -734,16 +891,54 @@ type GetReadinessResponseObject interface {
 	VisitGetReadinessResponse(w http.ResponseWriter) error
 }
 
-type GetReadiness200JSONResponse HealthStatus
+type GetReadiness200ResponseHeaders struct {
+	XRequestId *string
+}
+
+type GetReadiness200JSONResponse struct {
+	Body    HealthStatus
+	Headers GetReadiness200ResponseHeaders
+}
 
 func (response GetReadiness200JSONResponse) VisitGetReadinessResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReadiness500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetReadiness500ApplicationProblemPlusJSONResponse) VisitGetReadinessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -762,6 +957,9 @@ func (response GetReadiness503ApplicationProblemPlusJSONResponse) VisitGetReadin
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
@@ -775,15 +973,37 @@ type ListNotesResponseObject interface {
 	VisitListNotesResponse(w http.ResponseWriter) error
 }
 
-type ListNotes200JSONResponse NoteList
+type ListNotes200ResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+
+type ListNotes200JSONResponse struct {
+	Body    NoteList
+	Headers ListNotes200ResponseHeaders
+}
 
 func (response ListNotes200JSONResponse) VisitListNotesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
@@ -796,10 +1016,22 @@ type ListNotes400ApplicationProblemPlusJSONResponse struct {
 func (response ListNotes400ApplicationProblemPlusJSONResponse) VisitListNotesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
@@ -816,11 +1048,23 @@ func (response ListNotes401ApplicationProblemPlusJSONResponse) VisitListNotesRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
 	}
 	if response.Headers.WWWAuthenticate != nil {
 		w.Header().Set("WWW-Authenticate", fmt.Sprint(*response.Headers.WWWAuthenticate))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
@@ -838,10 +1082,50 @@ func (response ListNotes429ApplicationProblemPlusJSONResponse) VisitListNotesRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotes500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListNotes500ApplicationProblemPlusJSONResponse) VisitListNotesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -856,9 +1140,13 @@ type CreateNoteResponseObject interface {
 }
 
 type CreateNote201ResponseHeaders struct {
+	CacheControl        *string
 	ETag                *string
 	IdempotencyReplayed *string
 	Location            *string
+	RateLimit           *string
+	RateLimitPolicy     *string
+	XRequestId          *string
 }
 
 type CreateNote201JSONResponse struct {
@@ -873,6 +1161,9 @@ func (response CreateNote201JSONResponse) VisitCreateNoteResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
 	}
@@ -881,6 +1172,15 @@ func (response CreateNote201JSONResponse) VisitCreateNoteResponse(w http.Respons
 	}
 	if response.Headers.Location != nil {
 		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(201)
 	_, err := buf.WriteTo(w)
@@ -894,10 +1194,22 @@ type CreateNote400ApplicationProblemPlusJSONResponse struct {
 func (response CreateNote400ApplicationProblemPlusJSONResponse) VisitCreateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
@@ -914,11 +1226,23 @@ func (response CreateNote401ApplicationProblemPlusJSONResponse) VisitCreateNoteR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
 	}
 	if response.Headers.WWWAuthenticate != nil {
 		w.Header().Set("WWW-Authenticate", fmt.Sprint(*response.Headers.WWWAuthenticate))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
@@ -932,11 +1256,51 @@ type CreateNote403ApplicationProblemPlusJSONResponse struct {
 func (response CreateNote403ApplicationProblemPlusJSONResponse) VisitCreateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNote413ApplicationProblemPlusJSONResponse struct {
+	PayloadTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response CreateNote413ApplicationProblemPlusJSONResponse) VisitCreateNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -948,10 +1312,22 @@ type CreateNote415ApplicationProblemPlusJSONResponse struct {
 func (response CreateNote415ApplicationProblemPlusJSONResponse) VisitCreateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(415)
 	_, err := buf.WriteTo(w)
 	return err
@@ -964,10 +1340,22 @@ type CreateNote422ApplicationProblemPlusJSONResponse struct {
 func (response CreateNote422ApplicationProblemPlusJSONResponse) VisitCreateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
@@ -984,10 +1372,50 @@ func (response CreateNote429ApplicationProblemPlusJSONResponse) VisitCreateNoteR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNote500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateNote500ApplicationProblemPlusJSONResponse) VisitCreateNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1000,10 +1428,30 @@ type DeleteNoteResponseObject interface {
 	VisitDeleteNoteResponse(w http.ResponseWriter) error
 }
 
+type DeleteNote204ResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+
 type DeleteNote204Response struct {
+	Headers DeleteNote204ResponseHeaders
 }
 
 func (response DeleteNote204Response) VisitDeleteNoteResponse(w http.ResponseWriter) error {
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(204)
 	return nil
 }
@@ -1019,11 +1467,23 @@ func (response DeleteNote401ApplicationProblemPlusJSONResponse) VisitDeleteNoteR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
 	}
 	if response.Headers.WWWAuthenticate != nil {
 		w.Header().Set("WWW-Authenticate", fmt.Sprint(*response.Headers.WWWAuthenticate))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
@@ -1037,10 +1497,22 @@ type DeleteNote403ApplicationProblemPlusJSONResponse struct {
 func (response DeleteNote403ApplicationProblemPlusJSONResponse) VisitDeleteNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1053,10 +1525,22 @@ type DeleteNote404ApplicationProblemPlusJSONResponse struct {
 func (response DeleteNote404ApplicationProblemPlusJSONResponse) VisitDeleteNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1073,10 +1557,50 @@ func (response DeleteNote429ApplicationProblemPlusJSONResponse) VisitDeleteNoteR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteNote500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteNote500ApplicationProblemPlusJSONResponse) VisitDeleteNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1090,7 +1614,11 @@ type GetNoteResponseObject interface {
 }
 
 type GetNote200ResponseHeaders struct {
-	ETag *string
+	CacheControl    *string
+	ETag            *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
 }
 
 type GetNote200JSONResponse struct {
@@ -1105,8 +1633,20 @@ func (response GetNote200JSONResponse) VisitGetNoteResponse(w http.ResponseWrite
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
@@ -1124,11 +1664,23 @@ func (response GetNote401ApplicationProblemPlusJSONResponse) VisitGetNoteRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
 	}
 	if response.Headers.WWWAuthenticate != nil {
 		w.Header().Set("WWW-Authenticate", fmt.Sprint(*response.Headers.WWWAuthenticate))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
@@ -1142,10 +1694,22 @@ type GetNote404ApplicationProblemPlusJSONResponse struct {
 func (response GetNote404ApplicationProblemPlusJSONResponse) VisitGetNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1162,10 +1726,50 @@ func (response GetNote429ApplicationProblemPlusJSONResponse) VisitGetNoteRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNote500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetNote500ApplicationProblemPlusJSONResponse) VisitGetNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1181,7 +1785,11 @@ type UpdateNoteResponseObject interface {
 }
 
 type UpdateNote200ResponseHeaders struct {
-	ETag *string
+	CacheControl    *string
+	ETag            *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
 }
 
 type UpdateNote200JSONResponse struct {
@@ -1196,8 +1804,20 @@ func (response UpdateNote200JSONResponse) VisitUpdateNoteResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
@@ -1211,10 +1831,22 @@ type UpdateNote400ApplicationProblemPlusJSONResponse struct {
 func (response UpdateNote400ApplicationProblemPlusJSONResponse) VisitUpdateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1231,11 +1863,23 @@ func (response UpdateNote401ApplicationProblemPlusJSONResponse) VisitUpdateNoteR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
 	}
 	if response.Headers.WWWAuthenticate != nil {
 		w.Header().Set("WWW-Authenticate", fmt.Sprint(*response.Headers.WWWAuthenticate))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
@@ -1249,10 +1893,22 @@ type UpdateNote403ApplicationProblemPlusJSONResponse struct {
 func (response UpdateNote403ApplicationProblemPlusJSONResponse) VisitUpdateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1265,10 +1921,22 @@ type UpdateNote404ApplicationProblemPlusJSONResponse struct {
 func (response UpdateNote404ApplicationProblemPlusJSONResponse) VisitUpdateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1281,11 +1949,51 @@ type UpdateNote412ApplicationProblemPlusJSONResponse struct {
 func (response UpdateNote412ApplicationProblemPlusJSONResponse) VisitUpdateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateNote413ApplicationProblemPlusJSONResponse struct {
+	PayloadTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateNote413ApplicationProblemPlusJSONResponse) VisitUpdateNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1297,10 +2005,22 @@ type UpdateNote415ApplicationProblemPlusJSONResponse struct {
 func (response UpdateNote415ApplicationProblemPlusJSONResponse) VisitUpdateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(415)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1313,10 +2033,22 @@ type UpdateNote428ApplicationProblemPlusJSONResponse struct {
 func (response UpdateNote428ApplicationProblemPlusJSONResponse) VisitUpdateNoteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(428)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1333,10 +2065,50 @@ func (response UpdateNote429ApplicationProblemPlusJSONResponse) VisitUpdateNoteR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateNote500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateNote500ApplicationProblemPlusJSONResponse) VisitUpdateNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1350,8 +2122,11 @@ type CreateSessionResponseObject interface {
 }
 
 type CreateSession201ResponseHeaders struct {
-	CacheControl *string
-	SetCookie    *string
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	SetCookie       *string
+	XRequestId      *string
 }
 
 type CreateSession201JSONResponse struct {
@@ -1369,8 +2144,17 @@ func (response CreateSession201JSONResponse) VisitCreateSessionResponse(w http.R
 	if response.Headers.CacheControl != nil {
 		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
 	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(201)
 	_, err := buf.WriteTo(w)
@@ -1384,10 +2168,22 @@ type CreateSession400ApplicationProblemPlusJSONResponse struct {
 func (response CreateSession400ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1404,11 +2200,23 @@ func (response CreateSession401ApplicationProblemPlusJSONResponse) VisitCreateSe
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
 	}
 	if response.Headers.WWWAuthenticate != nil {
 		w.Header().Set("WWW-Authenticate", fmt.Sprint(*response.Headers.WWWAuthenticate))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
@@ -1422,11 +2230,51 @@ type CreateSession403ApplicationProblemPlusJSONResponse struct {
 func (response CreateSession403ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession413ApplicationProblemPlusJSONResponse struct {
+	PayloadTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response CreateSession413ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1438,10 +2286,22 @@ type CreateSession415ApplicationProblemPlusJSONResponse struct {
 func (response CreateSession415ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(415)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1458,10 +2318,50 @@ func (response CreateSession429ApplicationProblemPlusJSONResponse) VisitCreateSe
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateSession500ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1474,7 +2374,11 @@ type DeleteCurrentSessionResponseObject interface {
 }
 
 type DeleteCurrentSession204ResponseHeaders struct {
-	SetCookie *string
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	SetCookie       *string
+	XRequestId      *string
 }
 
 type DeleteCurrentSession204Response struct {
@@ -1482,8 +2386,20 @@ type DeleteCurrentSession204Response struct {
 }
 
 func (response DeleteCurrentSession204Response) VisitDeleteCurrentSessionResponse(w http.ResponseWriter) error {
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(204)
 	return nil
@@ -1500,11 +2416,23 @@ func (response DeleteCurrentSession401ApplicationProblemPlusJSONResponse) VisitD
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
 	}
 	if response.Headers.WWWAuthenticate != nil {
 		w.Header().Set("WWW-Authenticate", fmt.Sprint(*response.Headers.WWWAuthenticate))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
@@ -1518,10 +2446,22 @@ type DeleteCurrentSession403ApplicationProblemPlusJSONResponse struct {
 func (response DeleteCurrentSession403ApplicationProblemPlusJSONResponse) VisitDeleteCurrentSessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1538,10 +2478,50 @@ func (response DeleteCurrentSession429ApplicationProblemPlusJSONResponse) VisitD
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCurrentSession500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCurrentSession500ApplicationProblemPlusJSONResponse) VisitDeleteCurrentSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1554,15 +2534,37 @@ type CreateUserResponseObject interface {
 	VisitCreateUserResponse(w http.ResponseWriter) error
 }
 
-type CreateUser201JSONResponse User
+type CreateUser201ResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+
+type CreateUser201JSONResponse struct {
+	Body    User
+	Headers CreateUser201ResponseHeaders
+}
 
 func (response CreateUser201JSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(201)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1575,10 +2577,22 @@ type CreateUser400ApplicationProblemPlusJSONResponse struct {
 func (response CreateUser400ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1591,10 +2605,22 @@ type CreateUser403ApplicationProblemPlusJSONResponse struct {
 func (response CreateUser403ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1607,11 +2633,51 @@ type CreateUser409ApplicationProblemPlusJSONResponse struct {
 func (response CreateUser409ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUser413ApplicationProblemPlusJSONResponse struct {
+	PayloadTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUser413ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1623,10 +2689,22 @@ type CreateUser415ApplicationProblemPlusJSONResponse struct {
 func (response CreateUser415ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(415)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1643,10 +2721,50 @@ func (response CreateUser429ApplicationProblemPlusJSONResponse) VisitCreateUserR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUser500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUser500ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1658,15 +2776,37 @@ type GetCurrentUserResponseObject interface {
 	VisitGetCurrentUserResponse(w http.ResponseWriter) error
 }
 
-type GetCurrentUser200JSONResponse User
+type GetCurrentUser200ResponseHeaders struct {
+	CacheControl    *string
+	RateLimit       *string
+	RateLimitPolicy *string
+	XRequestId      *string
+}
+
+type GetCurrentUser200JSONResponse struct {
+	Body    User
+	Headers GetCurrentUser200ResponseHeaders
+}
 
 func (response GetCurrentUser200JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
@@ -1683,11 +2823,23 @@ func (response GetCurrentUser401ApplicationProblemPlusJSONResponse) VisitGetCurr
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.SetCookie != nil {
 		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
 	}
 	if response.Headers.WWWAuthenticate != nil {
 		w.Header().Set("WWW-Authenticate", fmt.Sprint(*response.Headers.WWWAuthenticate))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
 	}
 	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
@@ -1705,10 +2857,50 @@ func (response GetCurrentUser429ApplicationProblemPlusJSONResponse) VisitGetCurr
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
 	if response.Headers.RetryAfter != nil {
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentUser500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetCurrentUser500ApplicationProblemPlusJSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.RateLimit != nil {
+		w.Header().Set("RateLimit", fmt.Sprint(*response.Headers.RateLimit))
+	}
+	if response.Headers.RateLimitPolicy != nil {
+		w.Header().Set("RateLimit-Policy", fmt.Sprint(*response.Headers.RateLimitPolicy))
+	}
+	if response.Headers.XRequestId != nil {
+		w.Header().Set("X-Request-Id", fmt.Sprint(*response.Headers.XRequestId))
+	}
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2097,49 +3289,55 @@ func (sh *strictHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"/N8A",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

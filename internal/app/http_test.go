@@ -3,7 +3,9 @@ package app_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
@@ -40,6 +42,32 @@ func TestErrorResponses(t *testing.T) {
 	t.Run("rejects an oversized body", func(t *testing.T) {
 		res := s.raw(t, "POST", "/v1/users", strings.Repeat("x", 100*1024+1), nil)
 		expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 413, "payload-too-large")
+	})
+
+	t.Run("rejects an oversized chunked body with 413 on a protected route", func(t *testing.T) {
+		token := s.signUp(t).token
+		for _, path := range []string{"/v1/notes", "/v1/users"} {
+			body := io.MultiReader(strings.NewReader(`{"title":"`), strings.NewReader(strings.Repeat("x", 200*1024)), strings.NewReader(`"}`))
+			request, err := http.NewRequest("POST", s.URL+path, body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Authorization", "Bearer "+token)
+			response, err := http.DefaultClient.Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, _ := io.ReadAll(response.Body)
+			_ = response.Body.Close()
+			if request.ContentLength != 0 {
+				t.Fatalf("the request has a Content-Length of %d, so it isn't chunked", request.ContentLength)
+			}
+			expectProblem(t, response.StatusCode, response.Header.Get("Content-Type"), data, 413, "payload-too-large")
+		}
+		if strings.Contains(s.logs.String(), `"level":"ERROR"`) {
+			t.Fatalf("a client mistake was logged as an error: %s", s.logs.String())
+		}
 	})
 
 	for label, contentType := range map[string]string{"text/plain": "text/plain", "a form, as curl -d sends by default": "application/x-www-form-urlencoded"} {
@@ -84,6 +112,23 @@ func TestHeadersAndCORS(t *testing.T) {
 		}
 	})
 
+	t.Run("sends a strict CSP and keeps /v1 responses out of caches", func(t *testing.T) {
+		health := s.raw(t, "GET", "/healthz", "", nil)
+		notes := s.raw(t, "GET", "/v1/notes", "", nil)
+		for _, res := range []rawResponse{health, notes} {
+			if res.headers.Get("Content-Security-Policy") != "default-src 'none'; frame-ancestors 'none'" {
+				t.Fatalf("CSP = %q", res.headers.Get("Content-Security-Policy"))
+			}
+		}
+		if notes.status != 401 || notes.headers.Get("Cache-Control") != "no-store" {
+			t.Fatalf("%d Cache-Control = %q", notes.status, notes.headers.Get("Cache-Control"))
+		}
+		token := s.signUp(t).token
+		if res := s.raw(t, "GET", "/v1/notes", "", map[string]string{"Authorization": "Bearer " + token}); res.headers.Get("Cache-Control") != "no-store" {
+			t.Fatalf("Cache-Control = %q", res.headers.Get("Cache-Control"))
+		}
+	})
+
 	withCORS := newServer(t, map[string]string{"CORS_ORIGINS": "https://app.example"})
 	t.Run("allows a listed origin", func(t *testing.T) {
 		res := withCORS.raw(t, "GET", "/v1/notes", "", map[string]string{"Origin": "https://app.example"})
@@ -94,7 +139,7 @@ func TestHeadersAndCORS(t *testing.T) {
 	t.Run("exposes the headers a browser client reads", func(t *testing.T) {
 		res := withCORS.raw(t, "GET", "/v1/notes", "", map[string]string{"Origin": "https://app.example"})
 		exposed := strings.Split(res.headers.Get("Access-Control-Expose-Headers"), ", ")
-		for _, header := range []string{"ETag", "Location", "X-Request-Id", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Idempotency-Replayed", "WWW-Authenticate"} {
+		for _, header := range []string{"ETag", "Location", "X-Request-Id", "Retry-After", "RateLimit", "RateLimit-Policy", "Idempotency-Replayed", "WWW-Authenticate"} {
 			if !slices.Contains(exposed, header) {
 				t.Errorf("%s isn't exposed: %v", header, exposed)
 			}
@@ -140,6 +185,21 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+func TestDraining(t *testing.T) {
+	s := newServer(t, nil)
+	token := s.signUp(t).token
+	s.app.Drain()
+
+	ready := s.raw(t, "GET", "/readyz", "", nil)
+	expectProblem(t, ready.status, ready.headers.Get("Content-Type"), []byte(ready.body), 503, "service-unavailable")
+	if res := s.raw(t, "GET", "/healthz", "", nil); res.status != 200 {
+		t.Fatalf("healthz = %d while draining", res.status)
+	}
+	if res := s.raw(t, "GET", "/v1/notes", "", map[string]string{"Authorization": "Bearer " + token}); res.status != 200 {
+		t.Fatalf("a request while draining got %d: %s", res.status, res.body)
+	}
+}
+
 func TestLogging(t *testing.T) {
 	s := newServer(t, nil)
 	user := s.signUp(t)
@@ -150,6 +210,12 @@ func TestLogging(t *testing.T) {
 	}
 	if !strings.Contains(logs, `"msg":"Request completed"`) || !strings.Contains(logs, `"status":200`) || !strings.Contains(logs, `"requestId"`) {
 		t.Fatalf("logs = %s", logs)
+	}
+
+	s.raw(t, "GET", "/healthz", "", nil)
+	s.raw(t, "GET", "/readyz", "", nil)
+	if logs := s.logs.String(); strings.Contains(logs, `"path":"/healthz"`) || strings.Contains(logs, `"path":"/readyz"`) {
+		t.Fatalf("health checks were logged above debug: %s", logs)
 	}
 }
 
@@ -183,6 +249,10 @@ func TestOpenAPI(t *testing.T) {
 		t.Fatal("the served spec doesn't match api/openapi.yaml. Run go generate ./...")
 	}
 
+	if served["info"].(map[string]any)["title"] != spec.Info.Title || served["info"].(map[string]any)["version"] != spec.Info.Version {
+		t.Fatalf("served info = %v", served["info"])
+	}
+
 	for path, item := range spec.Paths.Map() {
 		for method, op := range item.Operations() {
 			if op.OperationID == "" || op.Summary == "" {
@@ -190,9 +260,6 @@ func TestOpenAPI(t *testing.T) {
 			}
 			if !strings.HasPrefix(path, "/v1") {
 				continue
-			}
-			if op.Responses.Value("429") == nil {
-				t.Errorf("%s %s doesn't document 429", method, path)
 			}
 			if method != "GET" && op.Responses.Value("403") == nil {
 				t.Errorf("%s %s changes data, so it must document 403 for blocked cross-origin requests", method, path)
@@ -212,10 +279,103 @@ func TestOpenAPI(t *testing.T) {
 		}
 	}
 
-	docs := s.raw(t, "GET", "/docs", "", nil)
-	if docs.status != 200 || !strings.Contains(docs.body, "swagger-ui") {
-		t.Fatalf("docs = %d", docs.status)
+}
+
+// TestSpecDocumentsMiddlewareResponses checks that every status and header the middleware can send, before a
+// handler runs, is in the spec, so a client generated from it can handle them.
+func TestSpecDocumentsMiddlewareResponses(t *testing.T) {
+	spec, err := openapi3.NewLoader().LoadFromFile("../../api/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
 	}
+	for path, item := range spec.Paths.Map() {
+		v1 := strings.HasPrefix(path, "/v1/")
+		for method, op := range item.Operations() {
+			var want []string
+			if v1 {
+				want = append(want, "429")
+			}
+			if v1 && method != "GET" {
+				want = append(want, "403")
+			}
+			if op.RequestBody != nil {
+				want = append(want, "400", "413", "415")
+			}
+			for _, status := range append(want, "500") {
+				if op.Responses.Value(status) == nil {
+					t.Errorf("%s %s doesn't document %s", method, path, status)
+				}
+			}
+			headers := []string{"X-Request-Id"}
+			if v1 {
+				headers = append(headers, "Cache-Control", "RateLimit", "RateLimit-Policy")
+			}
+			for status, response := range op.Responses.Map() {
+				for _, header := range headers {
+					if response.Value.Headers[header] == nil {
+						t.Errorf("%s %s %s doesn't document %s", method, path, status, header)
+					}
+				}
+			}
+			if limited := op.Responses.Value("429"); limited != nil && limited.Value.Headers["Retry-After"] == nil {
+				t.Errorf("%s %s 429 doesn't document Retry-After", method, path)
+			}
+		}
+	}
+}
+
+func TestDocs(t *testing.T) {
+	s := newServer(t, nil)
+
+	t.Run("serves Swagger UI from this origin under a strict CSP", func(t *testing.T) {
+		docs := s.raw(t, "GET", "/docs", "", nil)
+		if docs.status != 200 || !strings.Contains(docs.body, `<script src="/docs/swagger-ui-bundle.js">`) || strings.Contains(docs.body, "https://") {
+			t.Fatalf("docs = %d %s", docs.status, docs.body)
+		}
+		want := "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		if docs.headers.Get("Content-Security-Policy") != want {
+			t.Fatalf("CSP = %q", docs.headers.Get("Content-Security-Policy"))
+		}
+		for path, contentType := range map[string]string{"/docs/init.js": "text/javascript", "/docs/swagger-ui-bundle.js": "text/javascript", "/docs/swagger-ui.css": "text/css"} {
+			res := s.raw(t, "GET", path, "", nil)
+			if res.status != 200 || !strings.HasPrefix(res.headers.Get("Content-Type"), contentType) || len(res.body) == 0 {
+				t.Errorf("%s = %d %q", path, res.status, res.headers.Get("Content-Type"))
+			}
+		}
+	})
+
+	t.Run("sends Swagger UI gzipped only to clients that accept it", func(t *testing.T) {
+		plain := s.raw(t, "GET", "/docs/swagger-ui.css", "", map[string]string{"Accept-Encoding": "identity"})
+		zipped := s.raw(t, "GET", "/docs/swagger-ui.css", "", map[string]string{"Accept-Encoding": "gzip"})
+		if plain.headers.Get("Content-Encoding") != "" || !strings.Contains(plain.body, ".swagger-ui") {
+			t.Fatalf("identity: %v", plain.headers)
+		}
+		if zipped.headers.Get("Content-Encoding") != "gzip" || !strings.HasPrefix(zipped.body, "\x1f\x8b") {
+			t.Fatalf("gzip: %v", zipped.headers)
+		}
+	})
+
+	t.Run("titles the page after the spec", func(t *testing.T) {
+		source, err := os.ReadFile("../../api/openapi.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec, err := openapi3.NewLoader().LoadFromData(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if docs := s.raw(t, "GET", "/docs", "", nil); !strings.Contains(docs.body, "<title>"+spec.Info.Title+"</title>") {
+			t.Fatalf("docs = %s", docs.body)
+		}
+	})
+
+	t.Run("hides the docs and spec unless DOCS_ENABLED is true", func(t *testing.T) {
+		off := newServer(t, map[string]string{"DOCS_ENABLED": "false"})
+		for _, path := range []string{"/docs", "/openapi.json", "/docs/swagger-ui-bundle.js"} {
+			res := off.raw(t, "GET", path, "", nil)
+			expectProblem(t, res.status, res.headers.Get("Content-Type"), []byte(res.body), 404, "not-found")
+		}
+	})
 }
 
 func TestCrossOriginProtection(t *testing.T) {

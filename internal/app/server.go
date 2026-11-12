@@ -12,6 +12,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -39,10 +40,15 @@ var publicAuthOperations = map[string]bool{"CreateUser": true, "CreateSession": 
 
 // Server is the API's HTTP handler and its shared state.
 type Server struct {
-	handler http.Handler
+	handler  http.Handler
+	handlers *handlers
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }
+
+// Drain makes /readyz return 503, so load balancers stop sending new requests, while the server keeps
+// answering the ones that still arrive.
+func (s *Server) Drain() { s.handlers.draining.Store(true) }
 
 // New builds the HTTP handler for the API.
 func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, error) {
@@ -56,12 +62,18 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 		return nil, fmt.Errorf("encode OpenAPI spec: %w", err)
 	}
 
-	h, err := newHandlers(pool, cfg.SessionTTLHours)
+	queries := store.New(pool)
+	limiter := rateLimiter{
+		queries:        queries,
+		trustProxyHops: cfg.TrustProxyHops,
+		global:         rateLimitPolicy{name: "global", quota: cfg.RateLimitPerMinute, windowSeconds: 60},
+		auth:           rateLimitPolicy{name: "auth", quota: cfg.AuthRateLimitPerMinute, windowSeconds: 60},
+		login:          rateLimitPolicy{name: "login", quota: cfg.LoginFailureLimit, windowSeconds: cfg.LoginFailureWindowSeconds},
+	}
+	h, err := newHandlers(pool, cfg.SessionTTLHours, limiter)
 	if err != nil {
 		return nil, err
 	}
-	queries := store.New(pool)
-	limiter := rateLimiter{queries: queries, trustProxyHops: cfg.TrustProxyHops}
 	errorHandler := newErrorHandler(logger)
 
 	authLimit := func(next api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
@@ -69,7 +81,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 			return next
 		}
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
-			if err := limiter.check(r, w, "auth", cfg.AuthRateLimitPerMinute); err != nil {
+			if err := limiter.check(w, r, limiter.auth); err != nil {
 				return nil, err
 			}
 			return next(ctx, w, r, request)
@@ -113,7 +125,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 
 	apiHandler := validator(routes)
 	limited := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := limiter.check(r, w, "global", cfg.RateLimitPerMinute); err != nil {
+		if err := limiter.check(w, r, limiter.global); err != nil {
 			errorHandler(w, r, err)
 			return
 		}
@@ -125,15 +137,16 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 			apiHandler.ServeHTTP(w, r)
 			return
 		}
-		protected.ServeHTTP(w, r)
+		w.Header().Set("Cache-Control", "no-store")
+		protected.ServeHTTP(w, r.WithContext(withRateLimitHeaders(r.Context())))
 	})
 
 	top := http.NewServeMux()
-	top.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(specJSON)
-	})
-	top.HandleFunc("GET /docs", serveDocs)
+	if cfg.DocsEnabled {
+		if err := registerDocs(top, spec.Info.Title, specJSON); err != nil {
+			return nil, err
+		}
+	}
 	top.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		state := &authState{}
 		v1.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authKey, state)))
@@ -145,15 +158,16 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 	handler = withRecovery(logger, handler)
 	handler = withAccessLog(logger, handler)
 	handler = withRequestID(handler)
-	handler = otelhttp.NewHandler(handler, "http.request")
-	return &Server{handler: handler}, nil
+	handler = otelhttp.NewHandler(handler, "http.request", otelhttp.WithFilter(func(r *http.Request) bool { return !isHealthCheck(r.URL.Path) }))
+	return &Server{handler: handler, handlers: h}, nil
 }
 
 // authenticate checks one security scheme. A request with an Authorization header
 // can only pass bearerAuth, so a bad header never falls back to the cookie.
 func authenticate(ctx context.Context, queries *store.Queries, r *http.Request, scheme string) error {
 	header := r.Header.Get("Authorization")
-	token, found := strings.CutPrefix(header, "Bearer ")
+	authScheme, token, found := strings.Cut(header, " ")
+	found = found && strings.EqualFold(authScheme, "Bearer")
 	failure := errUnauthorized
 	if scheme == "cookieAuth" {
 		cookie, err := r.Cookie(sessionCookieName)
@@ -182,19 +196,24 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 		var p *problem.Error
 		if errors.As(err, &p) {
 			if !problem.Known(p.Slug) {
-				logger.Error("Unknown problem type, sent as internal-error", "requestId", requestID(r.Context()), "slug", p.Slug)
+				logger.ErrorContext(r.Context(), "Unknown problem type, sent as internal-error", "requestId", requestID(r.Context()), "slug", p.Slug)
 			} else if p.Cause != nil && p.Status() >= http.StatusInternalServerError {
-				logger.Warn(p.Detail, "requestId", requestID(r.Context()), "err", p.Cause)
+				logger.WarnContext(r.Context(), p.Detail, "requestId", requestID(r.Context()), "err", p.Cause)
 			}
 			problem.Write(w, r, p)
 			return
 		}
+		if p := constraintProblem(err); p != nil {
+			logger.WarnContext(r.Context(), "A database constraint rejected the request", "requestId", requestID(r.Context()), "err", err)
+			problem.Write(w, r, p)
+			return
+		}
 		if r.Context().Err() != nil && errors.Is(err, context.Canceled) {
-			logger.Debug("Client closed the request", "requestId", requestID(r.Context()), "err", err)
+			logger.DebugContext(r.Context(), "Client closed the request", "requestId", requestID(r.Context()), "err", err)
 			w.WriteHeader(statusClientClosedRequest)
 			return
 		}
-		logger.Error("Unhandled error", "requestId", requestID(r.Context()), "err", err)
+		logger.ErrorContext(r.Context(), "Unhandled error", "requestId", requestID(r.Context()), "err", err)
 		span := trace.SpanFromContext(r.Context())
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "unhandled error")
@@ -202,21 +221,30 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 	}
 }
 
+// Postgres SQLSTATE codes for constraint violations.
+const (
+	pgUniqueViolation     = "23505"
+	pgForeignKeyViolation = "23503"
+	pgCheckViolation      = "23514"
+)
+
+// constraintProblem maps a constraint violation that no handler expected to a problem, without naming the
+// constraint or quoting SQL.
+func constraintProblem(err error) *problem.Error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return nil
+	}
+	switch pgErr.Code {
+	case pgUniqueViolation, pgForeignKeyViolation:
+		return problem.New(problem.Conflict, "The change conflicts with the current data, such as a record another request just created or deleted. Fetch the current state, then retry.")
+	case pgCheckViolation:
+		return problem.New(problem.ValidationFailed, "A value breaks a data rule. Check the fields against the API docs, then retry.")
+	}
+	return nil
+}
+
 func internalError(r *http.Request) *problem.Error {
 	return problem.New(problem.InternalError,
 		fmt.Sprintf("Something went wrong on our side. Retry, and quote request %s if it persists.", requestID(r.Context())))
-}
-
-const docsPage = `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>API Go starter</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1/swagger-ui.css"></head>
-<body><div id="swagger-ui"></div>
-<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.34.1/swagger-ui-bundle.js"></script>
-<script>SwaggerUIBundle({ url: '/openapi.json', dom_id: '#swagger-ui' });</script>
-</body></html>`
-
-func serveDocs(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(docsPage))
 }

@@ -34,3 +34,18 @@ func TestClientIP(t *testing.T) {
 		})
 	}
 }
+
+func TestRateLimitClient(t *testing.T) {
+	for address, want := range map[string]string{
+		"203.0.113.9":          "203.0.113.9",
+		"::ffff:203.0.113.9":   "203.0.113.9",
+		"2001:db8:1:2:3:4:5:6": "2001:db8:1:2::/64",
+		"2001:db8:1:2:ffff::1": "2001:db8:1:2::/64",
+		"fe80::1%eth0":         "fe80::/64",
+		"not an address":       "not an address",
+	} {
+		if got := rateLimitClient(address); got != want {
+			t.Errorf("rateLimitClient(%q) = %q, want %q", address, got, want)
+		}
+	}
+}

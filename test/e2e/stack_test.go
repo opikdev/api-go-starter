@@ -31,28 +31,34 @@ const (
 )
 
 type collector struct {
-	mu     sync.Mutex
-	traces bytes.Buffer
-}
-
-func (c *collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	body, _ := io.ReadAll(r.Body)
-	if r.URL.Path == "/v1/traces" {
-		c.mu.Lock()
-		c.traces.Write(body)
-		c.mu.Unlock()
-	}
-	w.Header().Set("Content-Type", "application/x-protobuf")
-	w.WriteHeader(http.StatusOK)
+	mu   sync.Mutex
+	path string
+	data bytes.Buffer
 }
 
 func (c *collector) contains(text string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return bytes.Contains(c.traces.Bytes(), []byte(text))
+	return bytes.Contains(c.data.Bytes(), []byte(text))
 }
 
-var traces = &collector{}
+var (
+	traces  = &collector{path: "/v1/traces"}
+	metrics = &collector{path: "/v1/metrics"}
+)
+
+func receive(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	for _, c := range []*collector{traces, metrics} {
+		if r.URL.Path == c.path {
+			c.mu.Lock()
+			c.data.Write(body)
+			c.mu.Unlock()
+		}
+	}
+	w.Header().Set("Content-Type", "application/x-protobuf")
+	w.WriteHeader(http.StatusOK)
+}
 
 func compose(t *testing.T, args ...string) string {
 	t.Helper()
@@ -102,7 +108,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	go func() { _ = http.Serve(listener, traces) }()
+	go func() { _ = http.Serve(listener, http.HandlerFunc(receive)) }()
 
 	_, _ = composeErr("down", "--volumes", "--remove-orphans")
 	if out, err := composeErr("up", "--build", "--detach", "--wait", "api"); err != nil {
@@ -239,12 +245,13 @@ func TestStack(t *testing.T) {
 		found := false
 		for _, line := range strings.Split(logs, "\n") {
 			var entry map[string]any
-			if json.Unmarshal([]byte(line), &entry) == nil && entry["msg"] == "Request completed" && entry["requestId"] != nil {
+			if json.Unmarshal([]byte(line), &entry) == nil && entry["msg"] == "Request completed" && entry["requestId"] != nil &&
+				entry["trace_id"] != nil && entry["span_id"] != nil {
 				found = true
 			}
 		}
 		if !found {
-			t.Fatal("no structured request log")
+			t.Fatal("no structured request log with trace context")
 		}
 	})
 
@@ -286,6 +293,9 @@ func TestStack(t *testing.T) {
 		compose(t, "stop", "api")
 		if code := strings.TrimSpace(compose(t, "ps", "--all", "api", "--format", "{{.ExitCode}}")); code != "0" {
 			t.Fatalf("exit code = %s", code)
+		}
+		if !metrics.contains("http.server.request.duration") || !metrics.contains("pgxpool") {
+			t.Fatal("shutdown didn't flush HTTP and pool metrics")
 		}
 	})
 }

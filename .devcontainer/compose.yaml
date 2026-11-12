@@ -1,6 +1,6 @@
 services:
   dev:
-    image: golang:1.27
+    image: golang:1.27.4@sha256:5e8afd493a7124a8586e134d9b532731161d4b9becf9dee5a5956b107426f93d
     command: sleep infinity
     working_dir: /workspace
     volumes:
@@ -10,6 +10,7 @@ services:
     environment:
       DATABASE_URL: postgres://api_app:api_app_dev_password@db:5432/api?sslmode=disable
       MIGRATION_DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/api?sslmode=disable
+      DOCS_ENABLED: "true"
       # Tests create and drop their own database here, because there's no Docker inside the container.
       TEST_DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/postgres?sslmode=disable
     depends_on:

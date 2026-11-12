@@ -15,7 +15,13 @@ import (
 const claimIdempotencyKey = `-- name: ClaimIdempotencyKey :one
 INSERT INTO idempotency_keys (user_id, endpoint, key, request_hash, response_body, expires_at)
 VALUES ($1, $2, $3, $4, '{}', now() + interval '24 hours')
-ON CONFLICT (user_id, endpoint, key) DO NOTHING
+ON CONFLICT (user_id, endpoint, key) DO UPDATE SET
+  request_hash = EXCLUDED.request_hash,
+  response_body = EXCLUDED.response_body,
+  expires_at = EXCLUDED.expires_at,
+  created_at = now(),
+  updated_at = now()
+WHERE idempotency_keys.expires_at <= now()
 RETURNING id
 `
 
@@ -97,21 +103,26 @@ func (q *Queries) FindIdempotencyKey(ctx context.Context, arg FindIdempotencyKey
 }
 
 const hitRateLimit = `-- name: HitRateLimit :one
-INSERT INTO rate_limits (key, reset_at) VALUES ($1, now() + interval '1 minute')
+INSERT INTO rate_limits (key, reset_at) VALUES ($1, now() + make_interval(secs => $2::int))
 ON CONFLICT (key) DO UPDATE SET
   count = CASE WHEN rate_limits.reset_at <= now() THEN 1 ELSE rate_limits.count + 1 END,
-  reset_at = CASE WHEN rate_limits.reset_at <= now() THEN now() + interval '1 minute' ELSE rate_limits.reset_at END,
+  reset_at = CASE WHEN rate_limits.reset_at <= now() THEN EXCLUDED.reset_at ELSE rate_limits.reset_at END,
   updated_at = now()
 RETURNING count, reset_at
 `
+
+type HitRateLimitParams struct {
+	Key           string
+	WindowSeconds int32
+}
 
 type HitRateLimitRow struct {
 	Count   int32
 	ResetAt time.Time
 }
 
-func (q *Queries) HitRateLimit(ctx context.Context, key string) (HitRateLimitRow, error) {
-	row := q.db.QueryRow(ctx, hitRateLimit, key)
+func (q *Queries) HitRateLimit(ctx context.Context, arg HitRateLimitParams) (HitRateLimitRow, error) {
+	row := q.db.QueryRow(ctx, hitRateLimit, arg.Key, arg.WindowSeconds)
 	var i HitRateLimitRow
 	err := row.Scan(&i.Count, &i.ResetAt)
 	return i, err
@@ -151,6 +162,15 @@ func (q *Queries) TryLockCleanup(ctx context.Context) (bool, error) {
 	var locked bool
 	err := row.Scan(&locked)
 	return locked, err
+}
+
+const undoRateLimitHit = `-- name: UndoRateLimitHit :exec
+UPDATE rate_limits SET count = count - 1, updated_at = now() WHERE key = $1 AND reset_at > now() AND count > 0
+`
+
+func (q *Queries) UndoRateLimitHit(ctx context.Context, key string) error {
+	_, err := q.db.Exec(ctx, undoRateLimitHit, key)
+	return err
 }
 
 const unlockCleanup = `-- name: UnlockCleanup :one

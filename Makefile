@@ -16,8 +16,8 @@ coverage:
 	grep -vE 'api\.gen\.go|client\.gen\.go|/store/(db|models|.*\.sql)\.go' coverage.out > coverage-hand.out
 	scripts/check-coverage.sh coverage-hand.out 80
 
-check-generated: generate
-	git diff --exit-code -- internal/api internal/apiclient internal/store
+check-generated:
+	scripts/check-generated.sh
 
 check-migrations:
 	scripts/check-migrations.sh

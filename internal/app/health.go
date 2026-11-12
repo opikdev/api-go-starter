@@ -8,10 +8,13 @@ import (
 )
 
 func (h *handlers) GetLiveness(context.Context, api.GetLivenessRequestObject) (api.GetLivenessResponseObject, error) {
-	return api.GetLiveness200JSONResponse{Status: api.Ok}, nil
+	return api.GetLiveness200JSONResponse{Body: api.HealthStatus{Status: api.Ok}}, nil
 }
 
 func (h *handlers) GetReadiness(ctx context.Context, _ api.GetReadinessRequestObject) (api.GetReadinessResponseObject, error) {
+	if h.draining.Load() {
+		return nil, problem.New(problem.ServiceUnavailable, "The API is shutting down. Send requests to another instance.")
+	}
 	if _, err := h.queries.Ping(ctx); err != nil {
 		return nil, &problem.Error{
 			Slug:    problem.ServiceUnavailable,
@@ -20,5 +23,5 @@ func (h *handlers) GetReadiness(ctx context.Context, _ api.GetReadinessRequestOb
 			Cause:   err,
 		}
 	}
-	return api.GetReadiness200JSONResponse{Status: api.Ok}, nil
+	return api.GetReadiness200JSONResponse{Body: api.HealthStatus{Status: api.Ok}}, nil
 }

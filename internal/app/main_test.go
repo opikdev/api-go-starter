@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/opikdev/api-go-starter/internal/apiclient"
@@ -84,6 +85,7 @@ func startDatabase(ctx context.Context) (string, func(), error) {
 		postgres.WithUsername("api_owner"),
 		postgres.WithPassword("api_owner_dev_password"),
 		postgres.WithInitScripts(filepath.Join("..", "..", "docker", "postgres", "init.sql")),
+		testcontainers.WithEnv(map[string]string{"PGOPTIONS": "-c api.app_password=api_app_dev_password"}),
 		postgres.BasicWaitStrategies(),
 	)
 	if err != nil {
@@ -120,7 +122,7 @@ func temporaryDatabase(ctx context.Context, admin, initSQL string) (string, func
 	if err != nil {
 		return "", nil, err
 	}
-	_, err = created.Exec(ctx, initSQL)
+	_, err = created.Exec(ctx, "set api.app_password = 'api_app_dev_password';\n"+initSQL)
 	_ = created.Close(ctx)
 	if err != nil {
 		return "", nil, err
@@ -149,6 +151,7 @@ func randomHex(n int) string {
 
 type testServer struct {
 	*httptest.Server
+	app  *app.Server
 	logs *strings.Builder
 }
 
@@ -158,6 +161,7 @@ func newServer(t *testing.T, overrides map[string]string) *testServer {
 		"DATABASE_URL":               appURL,
 		"RATE_LIMIT_PER_MINUTE":      "100000",
 		"AUTH_RATE_LIMIT_PER_MINUTE": "100000",
+		"DOCS_ENABLED":               "true",
 	}
 	for key, value := range overrides {
 		env[key] = value
@@ -182,7 +186,7 @@ func newServer(t *testing.T, overrides map[string]string) *testServer {
 	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return &testServer{Server: server, logs: logs}
+	return &testServer{Server: server, app: handler, logs: logs}
 }
 
 type lockedWriter struct {

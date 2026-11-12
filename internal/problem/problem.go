@@ -18,6 +18,7 @@ const (
 	NotFound             Slug = "not-found"
 	MethodNotAllowed     Slug = "method-not-allowed"
 	EmailTaken           Slug = "email-taken"
+	Conflict             Slug = "conflict"
 	VersionMismatch      Slug = "version-mismatch"
 	PayloadTooLarge      Slug = "payload-too-large"
 	UnsupportedMediaType Slug = "unsupported-media-type"
@@ -39,6 +40,7 @@ var catalog = map[Slug]struct {
 	NotFound:             {http.StatusNotFound, "Resource not found"},
 	MethodNotAllowed:     {http.StatusMethodNotAllowed, "Method not allowed"},
 	EmailTaken:           {http.StatusConflict, "Email already registered"},
+	Conflict:             {http.StatusConflict, "Conflict"},
 	VersionMismatch:      {http.StatusPreconditionFailed, "Resource version mismatch"},
 	PayloadTooLarge:      {http.StatusRequestEntityTooLarge, "Payload too large"},
 	UnsupportedMediaType: {http.StatusUnsupportedMediaType, "Unsupported media type"},

@@ -33,10 +33,10 @@ func (h *handlers) CreateUser(ctx context.Context, request api.CreateUserRequest
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
-	return api.CreateUser201JSONResponse(presentUser(publicid.Format(publicid.User, user.ID), user.Email, user.CreatedAt)), nil
+	return api.CreateUser201JSONResponse{Body: presentUser(publicid.Format(publicid.User, user.ID), user.Email, user.CreatedAt)}, nil
 }
 
 func (h *handlers) GetCurrentUser(ctx context.Context, _ api.GetCurrentUserRequestObject) (api.GetCurrentUserResponseObject, error) {
 	user := currentUser(ctx)
-	return api.GetCurrentUser200JSONResponse(presentUser(publicid.Format(publicid.User, user.ID), user.Email, user.CreatedAt)), nil
+	return api.GetCurrentUser200JSONResponse{Body: presentUser(publicid.Format(publicid.User, user.ID), user.Email, user.CreatedAt)}, nil
 }

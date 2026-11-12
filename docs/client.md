@@ -1,6 +1,6 @@
 # Call the API
 
-`api/openapi.yaml` is the contract, and the running API also serves it at `/openapi.json`. Generate a client from it in any language.
+`api/openapi.yaml` is the contract, and the running API also serves it at `/openapi.json` when `DOCS_ENABLED` is `true`. Generate a client from it in any language.
 
 ## From Go
 
