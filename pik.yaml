@@ -64,7 +64,7 @@ replace:
     to: "@{{owner}}"
     files: [.github/CODEOWNERS]
   # Keep in step with info.version in api/openapi.yaml. scripts/check-pik-manifest.sh fails otherwise.
-  - from: "  version: 0.3.0\n"
+  - from: "  version: 0.4.0\n"
     to: "  version: 0.1.0\n"
     files: [api/openapi.yaml]
   - from: api-go-starter

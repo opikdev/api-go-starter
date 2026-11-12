@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: api-go-starter
-  version: 0.3.0
+  version: 0.4.0
   description: A production-ready Go API. Every error is RFC 9457 Problem Details.
 components:
   securitySchemes:
