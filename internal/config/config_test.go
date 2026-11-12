@@ -17,7 +17,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Port != 3000 || cfg.TrustProxyHops != 0 || len(cfg.CORSOrigins) != 0 || cfg.AuthRateLimitPerMinute != 10 || cfg.SessionTTLHours != 168 ||
-		cfg.LoginFailureLimit != 5 || cfg.LoginFailureWindowSeconds != 900 {
+		cfg.LoginFailureLimit != 5 || cfg.LoginFailureWindowSeconds != 900 || cfg.ShutdownDrainSeconds != 5 || cfg.ShutdownTimeoutSeconds != 30 {
 		t.Fatalf("cfg = %+v", cfg)
 	}
 }
@@ -31,11 +31,12 @@ func TestLoadParsesOrigins(t *testing.T) {
 
 func TestLoadRejects(t *testing.T) {
 	cases := map[string]map[string]string{
-		"a missing DATABASE_URL": {},
-		"a bad port":             {"DATABASE_URL": dbURL, "PORT": "70000"},
-		"a non-numeric limit":    {"DATABASE_URL": dbURL, "RATE_LIMIT_PER_MINUTE": "many"},
-		"negative proxy hops":    {"DATABASE_URL": dbURL, "TRUST_PROXY_HOPS": "-1"},
-		"a bad log level":        {"DATABASE_URL": dbURL, "LOG_LEVEL": "loud"},
+		"a missing DATABASE_URL":                     {},
+		"a bad port":                                 {"DATABASE_URL": dbURL, "PORT": "70000"},
+		"a non-numeric limit":                        {"DATABASE_URL": dbURL, "RATE_LIMIT_PER_MINUTE": "many"},
+		"negative proxy hops":                        {"DATABASE_URL": dbURL, "TRUST_PROXY_HOPS": "-1"},
+		"a bad log level":                            {"DATABASE_URL": dbURL, "LOG_LEVEL": "loud"},
+		"a shutdown timeout below the write timeout": {"DATABASE_URL": dbURL, "SHUTDOWN_TIMEOUT_SECONDS": "29"},
 	}
 	for label, values := range cases {
 		if _, err := Load(env(values)); err == nil {

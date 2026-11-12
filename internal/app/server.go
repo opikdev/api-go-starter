@@ -39,10 +39,15 @@ var publicAuthOperations = map[string]bool{"CreateUser": true, "CreateSession": 
 
 // Server is the API's HTTP handler and its shared state.
 type Server struct {
-	handler http.Handler
+	handler  http.Handler
+	handlers *handlers
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }
+
+// Drain makes /readyz return 503, so load balancers stop sending new requests, while the server keeps
+// answering the ones that still arrive.
+func (s *Server) Drain() { s.handlers.draining.Store(true) }
 
 // New builds the HTTP handler for the API.
 func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, error) {
@@ -152,7 +157,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 	handler = withAccessLog(logger, handler)
 	handler = withRequestID(handler)
 	handler = otelhttp.NewHandler(handler, "http.request")
-	return &Server{handler: handler}, nil
+	return &Server{handler: handler, handlers: h}, nil
 }
 
 // authenticate checks one security scheme. A request with an Authorization header

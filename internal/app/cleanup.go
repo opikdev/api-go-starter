@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -10,6 +12,22 @@ import (
 )
 
 const cleanupBatchSize = 1000
+
+// RunCleanup deletes expired rows every interval until ctx is done.
+func RunCleanup(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := DeleteExpiredRows(ctx, pool); err != nil {
+				logger.ErrorContext(ctx, "Cleanup failed", "err", err)
+			}
+		}
+	}
+}
 
 // DeleteExpiredRows removes expired sessions, idempotency keys, and rate limit windows in batches, so each
 // statement stays under the statement timeout. It does nothing while another replica holds the cleanup lock.

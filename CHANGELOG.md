@@ -10,6 +10,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 - `migrate` holds a Postgres advisory lock for the whole run, so concurrent runs, such as one per replica, wait in turn instead of failing. It also sets `lock_timeout` to 5 seconds for migration DDL.
 
+- Graceful drain on `SIGTERM` or `SIGINT`: `/readyz` returns 503 for `SHUTDOWN_DRAIN_SECONDS` (default 5) while requests are still served, then in-flight requests get `SHUTDOWN_TIMEOUT_SECONDS` (default 30, up from a fixed 10, and never below the write timeout) before the cleanup job, pool, and telemetry close. Compose sets `stop_grace_period: 40s`.
+
 ### Changed
 
 - **Breaking:** rate limit headers follow draft-ietf-httpapi-ratelimit-headers. Every `/v1` response sends `RateLimit-Policy`, such as `"global";q=300;w=60`, and `RateLimit`, such as `"global";r=238;t=25`, listing the auth policy too on registration and login. On a 429, `RateLimit` and `Retry-After` describe only the policy that ran out. `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` are gone.

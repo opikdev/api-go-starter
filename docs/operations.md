@@ -19,6 +19,8 @@ Set these on the API process. `.env.example` lists every option, with values for
 | `AUTH_RATE_LIMIT_PER_MINUTE` | number | `10` | Per client, on registration and login |
 | `LOGIN_FAILURE_LIMIT` | number | `5` | Failed logins per account before login returns 429, from any address |
 | `LOGIN_FAILURE_WINDOW_SECONDS` | number, 1 to 86400 | `900` | Window for `LOGIN_FAILURE_LIMIT` |
+| `SHUTDOWN_DRAIN_SECONDS` | number, 0 to 300 | `5` | After `SIGTERM`, how long `/readyz` returns 503 while the API keeps serving, so load balancers stop sending traffic first |
+| `SHUTDOWN_TIMEOUT_SECONDS` | number, 30 to 3600 | `30` | Then, how long in-flight requests get to finish. At least the 30-second write timeout |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | URL | Empty | Turns on trace and error export. The exporter also reads the other standard `OTEL_EXPORTER_OTLP_*` variables |
 | `OTEL_SERVICE_NAME` | string | `api-go-starter` | Service name on exported traces |
 | `SEED_DEMO_DATA` | boolean | `false` | Set to `true` to let `seed` add the fake demo user. Compose and `.env.example` set it for local development |
@@ -46,7 +48,7 @@ Pushing a `vX.Y.Z` tag runs every CI check, then publishes an image for amd64 an
 2. Roll out the new image with `DATABASE_URL` set to `api_app`.
 3. Send traffic when `GET /readyz` returns 200.
 
-Use `/healthz` for liveness, or the image's built-in `HEALTHCHECK`. It stays 200 during a database outage, so restarts don't make an outage worse. On `SIGTERM`, the API stops taking connections and finishes in-flight requests before it exits.
+Use `/healthz` for liveness, or the image's built-in `HEALTHCHECK`. It stays 200 during a database outage, so restarts don't make an outage worse. On `SIGTERM` or `SIGINT`, `/readyz` returns 503 for `SHUTDOWN_DRAIN_SECONDS` while the API keeps serving. Then it stops taking connections, gives in-flight requests `SHUTDOWN_TIMEOUT_SECONDS` to finish, stops the cleanup job, closes the pool, and flushes telemetry. A second signal stops it at once.
 
 ## Change the schema safely
 

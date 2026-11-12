@@ -45,6 +45,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     extra_hosts:
       - host.docker.internal:host-gateway
+    # Above SHUTDOWN_DRAIN_SECONDS plus SHUTDOWN_TIMEOUT_SECONDS, so in-flight requests finish before a SIGKILL.
+    stop_grace_period: 40s
     ports:
       - 127.0.0.1:${PORT:-3000}:3000
     depends_on:

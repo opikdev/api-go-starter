@@ -12,6 +12,9 @@ func (h *handlers) GetLiveness(context.Context, api.GetLivenessRequestObject) (a
 }
 
 func (h *handlers) GetReadiness(ctx context.Context, _ api.GetReadinessRequestObject) (api.GetReadinessResponseObject, error) {
+	if h.draining.Load() {
+		return nil, problem.New(problem.ServiceUnavailable, "The API is shutting down. Send requests to another instance.")
+	}
 	if _, err := h.queries.Ping(ctx); err != nil {
 		return nil, &problem.Error{
 			Slug:    problem.ServiceUnavailable,

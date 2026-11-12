@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -17,6 +18,7 @@ type handlers struct {
 	sessionTTLHours int32
 	limiter         rateLimiter
 	dummyHash       string
+	draining        atomic.Bool
 }
 
 var _ api.StrictServerInterface = (*handlers)(nil)

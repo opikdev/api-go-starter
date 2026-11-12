@@ -168,6 +168,21 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+func TestDraining(t *testing.T) {
+	s := newServer(t, nil)
+	token := s.signUp(t).token
+	s.app.Drain()
+
+	ready := s.raw(t, "GET", "/readyz", "", nil)
+	expectProblem(t, ready.status, ready.headers.Get("Content-Type"), []byte(ready.body), 503, "service-unavailable")
+	if res := s.raw(t, "GET", "/healthz", "", nil); res.status != 200 {
+		t.Fatalf("healthz = %d while draining", res.status)
+	}
+	if res := s.raw(t, "GET", "/v1/notes", "", map[string]string{"Authorization": "Bearer " + token}); res.status != 200 {
+		t.Fatalf("a request while draining got %d: %s", res.status, res.body)
+	}
+}
+
 func TestLogging(t *testing.T) {
 	s := newServer(t, nil)
 	user := s.signUp(t)

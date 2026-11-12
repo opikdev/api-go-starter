@@ -149,6 +149,7 @@ func randomHex(n int) string {
 
 type testServer struct {
 	*httptest.Server
+	app  *app.Server
 	logs *strings.Builder
 }
 
@@ -182,7 +183,7 @@ func newServer(t *testing.T, overrides map[string]string) *testServer {
 	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return &testServer{Server: server, logs: logs}
+	return &testServer{Server: server, app: handler, logs: logs}
 }
 
 type lockedWriter struct {

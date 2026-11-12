@@ -15,6 +15,10 @@ const (
 	defaultServiceName = "api-go-starter"
 )
 
+// MaxRequestSeconds is the server's longest read or write timeout, so a shutdown timeout below it could cut
+// off a request that's still allowed to run.
+const MaxRequestSeconds = 30
+
 // Config holds every setting the serve command reads at startup.
 type Config struct {
 	Port                      int
@@ -29,6 +33,8 @@ type Config struct {
 	AuthRateLimitPerMinute    int
 	LoginFailureLimit         int
 	LoginFailureWindowSeconds int32
+	ShutdownDrainSeconds      int
+	ShutdownTimeoutSeconds    int
 	TracingEnabled            bool
 	ServiceName               string
 }
@@ -135,6 +141,8 @@ func Load(env func(string) string) (Config, error) {
 		AuthRateLimitPerMinute:    r.integer("AUTH_RATE_LIMIT_PER_MINUTE", 10, 1, 1_000_000),
 		LoginFailureLimit:         r.integer("LOGIN_FAILURE_LIMIT", 5, 1, 1_000_000),
 		LoginFailureWindowSeconds: r.int32("LOGIN_FAILURE_WINDOW_SECONDS", 900, 1, 86_400),
+		ShutdownDrainSeconds:      r.integer("SHUTDOWN_DRAIN_SECONDS", 5, 0, 300),
+		ShutdownTimeoutSeconds:    r.integer("SHUTDOWN_TIMEOUT_SECONDS", MaxRequestSeconds, MaxRequestSeconds, 3600),
 		TracingEnabled:            r.str("OTEL_EXPORTER_OTLP_ENDPOINT", "") != "",
 		ServiceName:               r.str("OTEL_SERVICE_NAME", defaultServiceName),
 	}
