@@ -14,12 +14,16 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 - The `urn:problem:conflict` problem type, with status 409. A unique or foreign key violation that no handler expected returns it instead of a 500, and a check violation returns 422 `validation-failed`, with no constraint name or SQL in `detail`.
 - `docs/customize.md` shows how to load related data for a page without a query per row.
+- OpenTelemetry metrics over OTLP/HTTP whenever traces are exported, with the same `OTEL_*` settings: HTTP server metrics, database call durations, and pool metrics. Shutdown flushes them.
+- Log lines written during a traced request or the cleanup job have `trace_id` and `span_id`. The cleanup job is traced.
 
 ### Changed
 
 - **Breaking:** rate limit headers follow draft-ietf-httpapi-ratelimit-headers. Every `/v1` response sends `RateLimit-Policy`, such as `"global";q=300;w=60`, and `RateLimit`, such as `"global";r=238;t=25`, listing the auth policy too on registration and login. On a 429, `RateLimit` and `Retry-After` describe only the policy that ran out. `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` are gone.
 
 - **Breaking:** `/docs` and `/openapi.json` return 404 unless `DOCS_ENABLED=true`. Compose, the dev container, and `.env.example` turn it on. See [ADR 008](docs/decisions/008-turn-off-api-docs-by-default.md).
+
+- `/healthz` and `/readyz` are logged at `debug` instead of `info`, and aren't traced.
 
 ### Fixed
 

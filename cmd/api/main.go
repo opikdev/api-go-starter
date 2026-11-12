@@ -60,7 +60,7 @@ func main() {
 func newLogger(level string) *slog.Logger {
 	var lvl slog.Level
 	_ = lvl.UnmarshalText([]byte(level))
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl}))
+	return slog.New(telemetry.LogHandler(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl})))
 }
 
 func serve(ctx context.Context, stopSignals func()) error {
@@ -69,10 +69,10 @@ func serve(ctx context.Context, stopSignals func()) error {
 		return err
 	}
 	logger := newLogger(cfg.LogLevel)
-	shutdownTracing := func(context.Context) error { return nil }
+	shutdownTelemetry := func(context.Context) error { return nil }
 	if cfg.TracingEnabled {
-		if shutdownTracing, err = telemetry.Start(ctx, cfg.ServiceName); err != nil {
-			return fmt.Errorf("start tracing: %w", err)
+		if shutdownTelemetry, err = telemetry.Start(ctx, cfg.ServiceName); err != nil {
+			return fmt.Errorf("start telemetry: %w", err)
 		}
 	}
 	pool, err := database.Open(ctx, cfg.DatabaseURL, cfg.StatementTimeoutMS, cfg.DatabasePoolMax)
@@ -124,7 +124,7 @@ func serve(ctx context.Context, stopSignals func()) error {
 	stopJobs()
 	jobs.Wait()
 	pool.Close()
-	return errors.Join(shutdownErr, shutdownTracing(shutdownCtx))
+	return errors.Join(shutdownErr, shutdownTelemetry(shutdownCtx))
 }
 
 func migrate(ctx context.Context) error {

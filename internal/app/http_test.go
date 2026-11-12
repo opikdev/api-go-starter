@@ -211,6 +211,12 @@ func TestLogging(t *testing.T) {
 	if !strings.Contains(logs, `"msg":"Request completed"`) || !strings.Contains(logs, `"status":200`) || !strings.Contains(logs, `"requestId"`) {
 		t.Fatalf("logs = %s", logs)
 	}
+
+	s.raw(t, "GET", "/healthz", "", nil)
+	s.raw(t, "GET", "/readyz", "", nil)
+	if logs := s.logs.String(); strings.Contains(logs, `"path":"/healthz"`) || strings.Contains(logs, `"path":"/readyz"`) {
+		t.Fatalf("health checks were logged above debug: %s", logs)
+	}
 }
 
 func TestOpenAPI(t *testing.T) {

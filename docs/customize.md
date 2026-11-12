@@ -41,6 +41,6 @@ To put the auth rate limit on a new public operation, add its operation ID to `p
 
 Remove the `Idempotency-Key` parameter from `createNote` in the spec, and run `make generate`. Then insert the note directly in `CreateNote`, delete `createIdempotently` and `internal/app/idempotency.go`, and add a migration that drops `idempotency_keys`. Remove its queries from `internal/store/queries/platform.sql` and its cleanup from `internal/app/cleanup.go`.
 
-## Remove tracing
+## Remove telemetry
 
-Delete `internal/telemetry/` and its call in `cmd/api/main.go`. Then remove `otelhttp` from `internal/app/server.go` and the `otelpgx` tracer from `internal/database/database.go`, and run `go mod tidy`. Error logging keeps working.
+Delete `internal/telemetry/` and its calls in `cmd/api/main.go`. Then remove `otelhttp` from `internal/app/server.go`, the cleanup span from `internal/app/cleanup.go`, and the `otelpgx` tracer and `RecordStats` from `internal/database/database.go`, and run `go mod tidy`. Error logging keeps working.

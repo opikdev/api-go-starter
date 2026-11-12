@@ -29,7 +29,7 @@ const (
 
 const defaultPoolMax = 10
 
-// Open connects a pool that traces queries and cancels slow statements. A poolMax above 0
+// Open connects a pool that traces queries, reports pool metrics, and cancels slow statements. A poolMax above 0
 // sets the pool size. Otherwise the URL's pool_max_conns applies, or 10 if it has none.
 func Open(ctx context.Context, databaseURL string, statementTimeoutMS int, poolMax int32) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(databaseURL)
@@ -50,6 +50,10 @@ func Open(ctx context.Context, databaseURL string, statementTimeoutMS int, poolM
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create pool: %w", err)
+	}
+	if err := otelpgx.RecordStats(pool); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("record pool metrics: %w", err)
 	}
 	return pool, nil
 }

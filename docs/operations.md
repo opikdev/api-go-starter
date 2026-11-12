@@ -22,8 +22,8 @@ Set these on the API process. `.env.example` lists every option, with values for
 | `SHUTDOWN_DRAIN_SECONDS` | number, 0 to 300 | `5` | After `SIGTERM`, how long `/readyz` returns 503 while the API keeps serving, so load balancers stop sending traffic first |
 | `SHUTDOWN_TIMEOUT_SECONDS` | number, 30 to 3600 | `30` | Then, how long in-flight requests get to finish. At least the 30-second write timeout |
 | `DOCS_ENABLED` | boolean | `false` | Serves Swagger UI at `/docs` and the spec at `/openapi.json`. Off, both return 404. Compose and `.env.example` turn it on for local development |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | URL | Empty | Turns on trace and error export. The exporter also reads the other standard `OTEL_EXPORTER_OTLP_*` variables |
-| `OTEL_SERVICE_NAME` | string | `api-go-starter` | Service name on exported traces |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | URL | Empty | Turns on trace, metric, and error export. The exporters also read the other standard `OTEL_EXPORTER_OTLP_*` variables, and `OTEL_METRIC_EXPORT_INTERVAL`, in milliseconds, which defaults to 60000 |
+| `OTEL_SERVICE_NAME` | string | `api-go-starter` | Service name on exported traces and metrics |
 | `SEED_DEMO_DATA` | boolean | `false` | Set to `true` to let `seed` add the fake demo user. Compose and `.env.example` set it for local development |
 
 The pool size comes from the first of these that's set: `DATABASE_POOL_MAX`, then `pool_max_conns` in `DATABASE_URL`, then `10`. Other pool and connection parameters in `DATABASE_URL`, such as `connect_timeout`, are kept, and `connect_timeout` defaults to 5 seconds.
@@ -76,6 +76,10 @@ pg_restore --no-owner --dbname="$NEW_DATABASE_URL" api.dump
 
 Test a restore regularly, because an untested backup isn't a backup.
 
-## Trace requests and errors
+## Trace, measure, and log
 
-Set `OTEL_EXPORTER_OTLP_ENDPOINT` to send traces to any OTLP/HTTP backend. Each request gets a span named after its route, such as `GET /v1/notes/{id}`, with its database queries nested inside. Unexpected errors are recorded on the span, so backends with error tracking can group them.
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` to send traces and metrics to any OTLP/HTTP backend.
+
+- **Traces:** each request gets a span named after its route, such as `GET /v1/notes/{id}`, with its database queries nested inside. The hourly cleanup job gets a span of its own. Unexpected errors are recorded on the span, so backends with error tracking can group them. `/healthz` and `/readyz` aren't traced.
+- **Metrics:** HTTP server metrics such as `http.server.request.duration`, database call durations, and pool metrics such as `pgxpool.acquired_connections`, every `OTEL_METRIC_EXPORT_INTERVAL`. Shutdown flushes the last batch.
+- **Logs:** JSON on stdout. A line written during a traced request or job has `trace_id` and `span_id`, so you can jump from a log line to its trace. Health checks log at `debug`, so they don't flood `info`.

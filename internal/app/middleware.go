@@ -79,7 +79,11 @@ func withAccessLog(logger *slog.Logger, next http.Handler) http.Handler {
 		started := time.Now()
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(recorder, r)
-		logger.Info("Request completed",
+		level := slog.LevelInfo
+		if isHealthCheck(r.URL.Path) {
+			level = slog.LevelDebug
+		}
+		logger.Log(r.Context(), level, "Request completed",
 			"requestId", requestID(r.Context()),
 			"method", r.Method,
 			"path", r.URL.Path,
@@ -101,7 +105,7 @@ func withRecovery(logger *slog.Logger, next http.Handler) http.Handler {
 				panic(recovered)
 			}
 			err := fmt.Errorf("panic: %v", recovered)
-			logger.Error("Panic recovered", "requestId", requestID(r.Context()), "err", err, "stack", string(debug.Stack()))
+			logger.ErrorContext(r.Context(), "Panic recovered", "requestId", requestID(r.Context()), "err", err, "stack", string(debug.Stack()))
 			span := trace.SpanFromContext(r.Context())
 			span.RecordError(err, trace.WithStackTrace(true))
 			span.SetStatus(codes.Error, "panic")
@@ -127,6 +131,8 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+func isHealthCheck(path string) bool { return path == "/healthz" || path == "/readyz" }
 
 func isDocsPath(path string) bool { return path == "/docs" || strings.HasPrefix(path, "/docs/") }
 

@@ -158,7 +158,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*Server, e
 	handler = withRecovery(logger, handler)
 	handler = withAccessLog(logger, handler)
 	handler = withRequestID(handler)
-	handler = otelhttp.NewHandler(handler, "http.request")
+	handler = otelhttp.NewHandler(handler, "http.request", otelhttp.WithFilter(func(r *http.Request) bool { return !isHealthCheck(r.URL.Path) }))
 	return &Server{handler: handler, handlers: h}, nil
 }
 
@@ -196,9 +196,9 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 		var p *problem.Error
 		if errors.As(err, &p) {
 			if !problem.Known(p.Slug) {
-				logger.Error("Unknown problem type, sent as internal-error", "requestId", requestID(r.Context()), "slug", p.Slug)
+				logger.ErrorContext(r.Context(), "Unknown problem type, sent as internal-error", "requestId", requestID(r.Context()), "slug", p.Slug)
 			} else if p.Cause != nil && p.Status() >= http.StatusInternalServerError {
-				logger.Warn(p.Detail, "requestId", requestID(r.Context()), "err", p.Cause)
+				logger.WarnContext(r.Context(), p.Detail, "requestId", requestID(r.Context()), "err", p.Cause)
 			}
 			problem.Write(w, r, p)
 			return
@@ -209,11 +209,11 @@ func newErrorHandler(logger *slog.Logger) func(http.ResponseWriter, *http.Reques
 			return
 		}
 		if r.Context().Err() != nil && errors.Is(err, context.Canceled) {
-			logger.Debug("Client closed the request", "requestId", requestID(r.Context()), "err", err)
+			logger.DebugContext(r.Context(), "Client closed the request", "requestId", requestID(r.Context()), "err", err)
 			w.WriteHeader(statusClientClosedRequest)
 			return
 		}
-		logger.Error("Unhandled error", "requestId", requestID(r.Context()), "err", err)
+		logger.ErrorContext(r.Context(), "Unhandled error", "requestId", requestID(r.Context()), "err", err)
 		span := trace.SpanFromContext(r.Context())
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "unhandled error")

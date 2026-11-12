@@ -14,7 +14,7 @@ A production-ready Go API you can run with one command and customize with coding
 - **Reliable by default:** rate limits, idempotency keys, optimistic concurrency, and cursor pagination.
 - **Consistent errors:** RFC 9457 Problem Details everywhere. See the [error reference](docs/errors.md).
 - **Safe data layer:** goose migrations embedded in the binary, constraints in the database, and an app role that can't change the schema.
-- **Ready to operate:** a distroless non-root image, health checks, JSON logs, and OpenTelemetry traces.
+- **Ready to operate:** a distroless non-root image, health checks, JSON logs with trace IDs, and OpenTelemetry traces and metrics.
 - **Agent-ready:** `AGENTS.md`, skills, and checks that run on every commit.
 - **Strict gates:** golangci-lint, the race detector, 80% coverage, architecture tests, and real end-to-end tests.
 

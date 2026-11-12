@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/opikdev/api-go-starter/internal/store"
 )
@@ -22,10 +24,18 @@ func RunCleanup(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, in
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := DeleteExpiredRows(ctx, pool); err != nil {
-				logger.ErrorContext(ctx, "Cleanup failed", "err", err)
-			}
+			cleanupOnce(ctx, pool, logger)
 		}
+	}
+}
+
+func cleanupOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) {
+	ctx, span := otel.Tracer("github.com/opikdev/api-go-starter/internal/app").Start(ctx, "cleanup expired rows")
+	defer span.End()
+	if err := DeleteExpiredRows(ctx, pool); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "cleanup failed")
+		logger.ErrorContext(ctx, "Cleanup failed", "err", err)
 	}
 }
 
