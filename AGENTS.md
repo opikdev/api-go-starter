@@ -8,7 +8,8 @@ A production-ready Go API: standard library `net/http`, a contract-first OpenAPI
 | [docs/customize.md](docs/customize.md) | How to add a feature, rename the project, or remove a module |
 | [docs/client.md](docs/client.md) | How to call the API from Go or other languages |
 | [docs/errors.md](docs/errors.md) | Every problem type the API can return |
-| [docs/operations.md](docs/operations.md) | Configuration, deploys, migrations, backups, and tracing |
+| [docs/deploy.md](docs/deploy.md) | Go-live checklist: TLS, roles and secrets, pool size, migrations, and shutdown |
+| [docs/operations.md](docs/operations.md) | Configuration, schema changes, backups, and telemetry |
 | [docs/decisions/](docs/decisions/) | Why it's built this way |
 | `.agents/skills/` | Step-by-step guides for recurring tasks |
 | `.mcp.json` | MCP servers for this project |

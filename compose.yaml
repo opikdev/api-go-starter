@@ -7,6 +7,8 @@ services:
       POSTGRES_USER: api_owner
       POSTGRES_PASSWORD: api_owner_dev_password
       POSTGRES_DB: api
+      # Gives init.sql the dev password for api_app.
+      PGOPTIONS: -c api.app_password=api_app_dev_password
     ports:
       - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
     volumes:

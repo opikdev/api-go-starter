@@ -37,19 +37,9 @@ Set it no higher than your real proxy count, because clients can put any address
 
 Rate limits count an IPv4 client by its address and an IPv6 client by its /64, so rotating addresses inside one network doesn't reset a limit. Each `/v1` response lists the limits that apply in `RateLimit-Policy`, such as `"global";q=300;w=60`, and what's left of each in `RateLimit`, such as `"global";r=238;t=25`. See [ADR 007](decisions/007-key-rate-limits-by-network-and-account.md).
 
-## Set up production roles
-
-Replace the dev passwords in `docker/postgres/init.sql`. Run the file once as the role that owns the schema, so tables created by migrations are granted to `api_app`.
-
 ## Deploy
 
-Before you tag a release, set `info.version` in `api/openapi.yaml` to the new version and run `make generate`, so `/openapi.json` reports it. Pushing a `vX.Y.Z` tag runs every CI check, including the end-to-end and migration checks. If they pass, it builds the image, fails on any fixable HIGH or CRITICAL vulnerability that Trivy finds, then publishes it for amd64 and arm64 to `ghcr.io`, with an SBOM and a signed build provenance attestation. Check it with `gh attestation verify oci://ghcr.io/<OWNER>/<REPO>:<VERSION> --owner <OWNER>`. The binary runs every step, so deploy in this order:
-
-1. Run `/api migrate` with `MIGRATION_DATABASE_URL` set to the owner role, as one job per deploy, before the new version takes traffic. It holds a Postgres advisory lock for the whole run, so a second run waits, then finds nothing to do. Running it from every replica is safe too.
-2. Roll out the new image with `DATABASE_URL` set to `api_app`.
-3. Send traffic when `GET /readyz` returns 200.
-
-Use `/healthz` for liveness, or the image's built-in `HEALTHCHECK`. It stays 200 during a database outage, so restarts don't make an outage worse. On `SIGTERM` or `SIGINT`, `/readyz` returns 503 for `SHUTDOWN_DRAIN_SECONDS` while the API keeps serving. Then it stops taking connections, gives in-flight requests `SHUTDOWN_TIMEOUT_SECONDS` to finish, stops the cleanup job, closes the pool, and flushes telemetry. A second signal stops it at once.
+See [Deploy to production](deploy.md) for releases, roles, secrets, rollout, and shutdown.
 
 ## Change the schema safely
 

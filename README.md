@@ -66,7 +66,7 @@ docker compose up --wait db
 make migrate seed run
 ```
 
-`make run`, `make migrate`, and `make seed` load `.env`, but variables you've already set win. To use your own Postgres instead of Compose, run `docker/postgres/init.sql` on it once as a superuser, then point both URLs in `.env` at it.
+`make run`, `make migrate`, and `make seed` load `.env`, but variables you've already set win. To use your own Postgres instead of Compose, run `docker/postgres/init.sql` on it once as a superuser, with `PGOPTIONS="-c api.app_password=api_app_dev_password"`, then point both URLs in `.env` at it.
 
 | Task | Command |
 |---|---|
@@ -84,7 +84,7 @@ TEST_DATABASE_URL=postgres://<SUPERUSER>@localhost:5432/postgres?sslmode=disable
 
 Each run creates a temporary database and drops it afterward, so existing data is never touched. The user needs permission to create databases and roles.
 
-To add a feature, rename the project, or remove a module, see [Customize the starter](docs/customize.md). To call the API from code, see [Call the API](docs/client.md). Before you deploy, read [Operate the API](docs/operations.md).
+To add a feature, rename the project, or remove a module, see [Customize the starter](docs/customize.md). To call the API from code, see [Call the API](docs/client.md). Before you deploy, read [Deploy to production](docs/deploy.md) and [Operate the API](docs/operations.md).
 
 ## Project structure
 
@@ -97,7 +97,7 @@ To add a feature, rename the project, or remove a module, see [Customize the sta
 | `internal/store/` | SQL queries and the code sqlc generates from them |
 | `migrations/` | SQL migrations, which are append-only |
 | `test/e2e/` | Tests that run the real Docker image |
-| `docs/` | [Architecture](docs/architecture.md), guides, and [decisions](docs/decisions/) |
+| `docs/` | [Architecture](docs/architecture.md), [deploy guide](docs/deploy.md), guides, and [decisions](docs/decisions/) |
 
 ## Contributing
 

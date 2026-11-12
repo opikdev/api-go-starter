@@ -19,8 +19,11 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 - `api/openapi.yaml` documents every status the middleware can return, with shared responses for 413 and 500, and shared headers: `X-Request-Id` on every response, and `Cache-Control`, `RateLimit`, and `RateLimit-Policy` on every `/v1` response. A test fails when an operation misses one.
 - `pik new` renames the README title and the spec's `info.title`, which also titles `/docs`, resets `info.version` to `0.1.0` and `CHANGELOG.md` to an empty `[Unreleased]` section, and regenerates the server so it embeds the renamed spec.
 - Compose builds the image once, in `migrate`, and `seed` and `api` reuse it. All three run with a read-only root filesystem.
+- `docs/deploy.md`, a go-live checklist: TLS and proxies, Postgres TLS, roles and secrets, pool size, migrations, drain and grace periods, docs, telemetry, and backups.
 
 ### Changed
+
+- **Breaking:** `docker/postgres/init.sql` no longer holds a password. It takes `api_app`'s password from the `api.app_password` setting, such as `PGOPTIONS="-c api.app_password=<PASSWORD>"`, fails without it, and sets the password again when the role exists, so you can create or rotate it without editing committed SQL. Compose passes the dev password.
 
 - `info.title` in the spec is the project name, `api-go-starter`, and `info.version` is the project version, `0.3.0`, instead of `1.0.0`.
 
